@@ -1,0 +1,34 @@
+# Environment
+.env
+.env.local
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Checkpoint
+checkpoint.txt
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
