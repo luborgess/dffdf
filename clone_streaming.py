@@ -65,11 +65,15 @@ CHUNK_SIZE = 512 * 1024  # 512KB por chunk (máximo MTProto)
 PARALLEL_UPLOADS = 10     # Chunks em paralelo no upload
 BUFFER_CHUNKS = 20        # Chunks em buffer (~10MB)
 
-# Rate limit
-MIN_INTERVAL = 2.5  # segundos entre mensagens
+# Rate limit - Telegram permite ~30-50 msg/min
+MIN_INTERVAL = 1.3  # ~46 msg/min (seguro dentro do limite)
 
 # Checkpoint
 CHECKPOINT_FILE = 'checkpoint.txt'
+
+# Watermark
+WATERMARK_PATH = os.path.expanduser('~/watermark.png')
+WATERMARK_ENABLED = os.path.exists(WATERMARK_PATH)
 
 # ============================================================
 # LOGGING
@@ -84,6 +88,115 @@ logging.basicConfig(
     ]
 )
 log = logging.getLogger(__name__)
+
+# ============================================================
+# WATERMARK PROCESSOR
+# ============================================================
+
+import subprocess
+from PIL import Image
+
+def add_watermark_video(input_path: str, output_path: str) -> bool:
+    """
+    Adiciona watermark em vídeo usando FFmpeg.
+    Posiciona em diagonal: superior esquerdo e inferior direito.
+    """
+    try:
+        # Verificar tamanho do arquivo de entrada
+        input_size = os.path.getsize(input_path)
+        if input_size < 1000:
+            log.warning(f"Arquivo de entrada muito pequeno: {input_size} bytes")
+            return False
+
+        # Filtro complexo para 2 watermarks em diagonal
+        filter_complex = (
+            '[1:v]scale=iw*0.225:-1,split=2[wm1][wm2];'
+            '[0:v][wm1]overlay=10:10[tmp1];'
+            '[tmp1][wm2]overlay=W-w-10:H-h-10'
+        )
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-i', WATERMARK_PATH,
+            '-filter_complex', filter_complex,
+            '-c:v', 'libx264',
+            '-c:a', 'copy',
+            '-preset', 'ultrafast',
+            '-crf', '23',
+            '-threads', '0',
+            '-movflags', '+faststart',
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+        if result.returncode != 0:
+            log.warning(f"FFmpeg erro: {result.stderr.decode()[-300:]}")
+            return False
+
+        # Verificar se arquivo de saída existe e tem tamanho razoável
+        if not os.path.exists(output_path):
+            log.warning("FFmpeg não criou arquivo de saída")
+            return False
+
+        output_size = os.path.getsize(output_path)
+        if output_size < 1000:
+            log.warning(f"Arquivo de saída muito pequeno: {output_size} bytes")
+            os.remove(output_path)
+            return False
+
+        # Verificar se tamanho de saída é pelo menos 10% do original (não corrompido)
+        if output_size < input_size * 0.1:
+            log.warning(f"Arquivo de saída suspeito: {output_size} vs {input_size} bytes")
+            os.remove(output_path)
+            return False
+
+        return True
+
+    except subprocess.TimeoutExpired:
+        log.error("FFmpeg timeout")
+        return False
+    except Exception as e:
+        log.error(f"Erro watermark vídeo: {e}")
+        return False
+
+
+def add_watermark_image(input_path: str, output_path: str) -> bool:
+    """
+    Adiciona watermark em imagem usando Pillow.
+    Posiciona em diagonal: superior esquerdo, centro e inferior direito.
+    """
+    try:
+        base = Image.open(input_path).convert('RGBA')
+        watermark = Image.open(WATERMARK_PATH).convert('RGBA')
+
+        # Redimensionar watermark para 22.5% da largura da imagem (50% maior que 15%)
+        wm_width = int(base.width * 0.225)
+        wm_ratio = wm_width / watermark.width
+        wm_height = int(watermark.height * wm_ratio)
+        watermark = watermark.resize((wm_width, wm_height), Image.Resampling.LANCZOS)
+
+        # Posições em diagonal (sem o centro)
+        positions = [
+            (10, 10),  # Superior esquerdo
+            (base.width - wm_width - 10, base.height - wm_height - 10),  # Inferior direito
+        ]
+
+        # Aplicar watermark em cada posição
+        for pos in positions:
+            base.paste(watermark, pos, watermark)
+
+        # Salvar
+        if output_path.lower().endswith('.png'):
+            base.save(output_path, 'PNG')
+        else:
+            base = base.convert('RGB')
+            base.save(output_path, 'JPEG', quality=95)
+
+        return True
+    except Exception as e:
+        log.error(f"Erro watermark imagem: {e}")
+        return False
+
 
 # ============================================================
 # TOPIC MANAGER
@@ -361,26 +474,95 @@ class StreamingCloner:
     
     async def _clone_small_file(self, msg: Message, target_topic: int = None) -> bool:
         """Clone de arquivo pequeno (cabe em RAM)."""
-        
+        import tempfile
+
         file_name = self._get_file_name(msg)
         file_size = self._get_file_size(msg)
-        
+
         log.info(f"↓↑ Pequeno: {file_name} ({file_size/(1024*1024):.1f}MB)")
-        
-        # Download para memória
-        data = await self.client.download_media(msg, file=bytes)
-        
-        # Upload
-        await self.client.send_file(
-            TARGET_CHAT,
-            data,
-            caption=msg.text or "",
-            reply_to=target_topic,
-            attributes=self._get_attributes(msg)
-        )
-        
-        log.info(f"✓ Pequeno: msg {msg.id}")
-        return True
+
+        # Download para arquivo temporário com nome correto
+        tmp_dir = tempfile.gettempdir()
+        tmp_path = os.path.join(tmp_dir, file_name)
+        wm_path = os.path.join(tmp_dir, f"wm_{file_name}")
+
+        try:
+            await self.client.download_media(msg, file=tmp_path)
+
+            # Detectar tipo de mídia
+            is_video = msg.video is not None
+            is_photo = msg.photo is not None
+            supports_streaming = False
+            upload_path = tmp_path  # Por padrão, enviar arquivo original
+
+            # Aplicar watermark se habilitado
+            if WATERMARK_ENABLED:
+                if is_video:
+                    log.info(f"🎬 Aplicando watermark em vídeo...")
+                    if add_watermark_video(tmp_path, wm_path):
+                        upload_path = wm_path
+                        log.info(f"✓ Watermark aplicada")
+                    else:
+                        log.warning(f"⚠ Falha na watermark, enviando original")
+
+                elif is_photo:
+                    log.info(f"🖼 Aplicando watermark em foto...")
+                    if add_watermark_image(tmp_path, wm_path):
+                        upload_path = wm_path
+                        log.info(f"✓ Watermark aplicada")
+                    else:
+                        log.warning(f"⚠ Falha na watermark, enviando original")
+
+            # Preparar atributos e thumbnail para vídeos
+            video_attrs = None
+            thumb_path = None
+            if is_video:
+                # Extrair atributos do vídeo original
+                for attr in (msg.video.attributes if msg.video else []):
+                    if isinstance(attr, DocumentAttributeVideo):
+                        supports_streaming = getattr(attr, 'supports_streaming', True)
+                        video_attrs = attr
+                        break
+
+                # Gerar thumbnail do vídeo processado
+                thumb_path = os.path.join(tmp_dir, f"thumb_{file_name}.jpg")
+                try:
+                    thumb_cmd = [
+                        'ffmpeg', '-y',
+                        '-i', upload_path,
+                        '-ss', '00:00:01',
+                        '-vframes', '1',
+                        '-vf', 'scale=320:-1',
+                        thumb_path
+                    ]
+                    subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+                except:
+                    thumb_path = None
+
+            await self.client.send_file(
+                TARGET_CHAT,
+                upload_path,
+                caption=msg.text or "",
+                reply_to=target_topic,
+                force_document=False,
+                supports_streaming=supports_streaming,
+                thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
+                attributes=[video_attrs] if video_attrs else None
+            )
+
+            # Limpar thumbnail
+            if thumb_path and os.path.exists(thumb_path):
+                os.remove(thumb_path)
+
+            log.info(f"✓ Pequeno: msg {msg.id}")
+            return True
+
+        finally:
+            # Limpar arquivos temporários
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            if os.path.exists(wm_path):
+                os.remove(wm_path)
     
     async def _clone_large_file_streaming(self, msg: Message, target_topic: int = None) -> bool:
         """
@@ -459,17 +641,49 @@ class StreamingCloner:
     
     def _get_file_name(self, msg: Message) -> str:
         """Retorna nome do arquivo."""
+        # Verificar documento
         if msg.document:
             for attr in msg.document.attributes:
                 if isinstance(attr, DocumentAttributeFilename):
                     return attr.file_name
+        # Verificar vídeo
+        if msg.video:
+            for attr in msg.video.attributes:
+                if isinstance(attr, DocumentAttributeFilename):
+                    return attr.file_name
+            # Vídeos podem não ter filename, gerar com extensão correta
+            ext = msg.video.mime_type.split('/')[-1] if msg.video.mime_type else 'mp4'
+            return f"video_{msg.id}.{ext}"
+        # Verificar áudio
+        if msg.audio:
+            for attr in msg.audio.attributes:
+                if isinstance(attr, DocumentAttributeFilename):
+                    return attr.file_name
+            ext = msg.audio.mime_type.split('/')[-1] if msg.audio.mime_type else 'mp3'
+            return f"audio_{msg.id}.{ext}"
+        # Verificar foto
+        if msg.photo:
+            return f"photo_{msg.id}.jpg"
         return f"file_{msg.id}"
     
-    def _get_attributes(self, msg: Message) -> list:
-        """Retorna atributos do documento."""
+    def _get_attributes(self, msg: Message, override_filename: str = None) -> list:
+        """Retorna atributos do documento, opcionalmente substituindo o filename."""
+        attrs = []
         if msg.document:
-            return msg.document.attributes
-        return []
+            attrs = list(msg.document.attributes)
+        elif msg.video:
+            attrs = list(msg.video.attributes)
+        elif msg.audio:
+            attrs = list(msg.audio.attributes)
+
+        # Se precisar sobrescrever o filename
+        if override_filename:
+            # Remove qualquer DocumentAttributeFilename existente
+            attrs = [a for a in attrs if not isinstance(a, DocumentAttributeFilename)]
+            # Adiciona o novo
+            attrs.append(DocumentAttributeFilename(file_name=override_filename))
+
+        return attrs
     
     def _create_input_media(self, msg: Message, input_file: InputFileBig):
         """Cria InputMedia baseado no tipo original."""
