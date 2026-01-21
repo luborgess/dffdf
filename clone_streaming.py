@@ -160,6 +160,61 @@ def add_watermark_video(input_path: str, output_path: str) -> bool:
         return False
 
 
+def generate_video_thumbnail(video_path: str, thumb_path: str) -> bool:
+    """
+    Gera thumbnail de vídeo de forma robusta.
+    Tenta múltiplos pontos de tempo até conseguir um frame válido.
+
+    Returns:
+        True se thumbnail foi gerado com sucesso, False caso contrário.
+    """
+    # Pontos de tempo para tentar extrair frame (em segundos)
+    # Começa do 0 para vídeos muito curtos
+    time_points = ['00:00:00.000', '00:00:00.500', '00:00:01.000', '00:00:02.000']
+
+    for time_point in time_points:
+        try:
+            thumb_cmd = [
+                'ffmpeg', '-y',
+                '-ss', time_point,
+                '-i', video_path,
+                '-vframes', '1',
+                '-vf', 'scale=320:-1',
+                '-q:v', '2',  # Alta qualidade JPEG
+                thumb_path
+            ]
+
+            result = subprocess.run(
+                thumb_cmd,
+                capture_output=True,
+                timeout=30
+            )
+
+            # Verificar se FFmpeg teve sucesso
+            if result.returncode != 0:
+                continue
+
+            # Verificar se arquivo foi criado e tem conteúdo válido
+            if os.path.exists(thumb_path):
+                thumb_size = os.path.getsize(thumb_path)
+                if thumb_size > 100:  # Thumbnail válido tem pelo menos 100 bytes
+                    log.debug(f"Thumbnail gerado em {time_point}: {thumb_size} bytes")
+                    return True
+                else:
+                    # Arquivo muito pequeno, provavelmente inválido
+                    os.remove(thumb_path)
+
+        except subprocess.TimeoutExpired:
+            log.debug(f"Timeout gerando thumbnail em {time_point}")
+            continue
+        except Exception as e:
+            log.debug(f"Erro gerando thumbnail em {time_point}: {e}")
+            continue
+
+    log.warning(f"Não foi possível gerar thumbnail para {video_path}")
+    return False
+
+
 def add_watermark_image(input_path: str, output_path: str) -> bool:
     """
     Adiciona watermark em imagem usando Pillow.
@@ -524,19 +579,9 @@ class StreamingCloner:
                         video_attrs = attr
                         break
 
-                # Gerar thumbnail do vídeo processado
+                # Gerar thumbnail do vídeo processado (função robusta com múltiplos fallbacks)
                 thumb_path = os.path.join(tmp_dir, f"thumb_{file_name}.jpg")
-                try:
-                    thumb_cmd = [
-                        'ffmpeg', '-y',
-                        '-i', upload_path,
-                        '-ss', '00:00:01',
-                        '-vframes', '1',
-                        '-vf', 'scale=320:-1',
-                        thumb_path
-                    ]
-                    subprocess.run(thumb_cmd, capture_output=True, timeout=30)
-                except:
+                if not generate_video_thumbnail(upload_path, thumb_path):
                     thumb_path = None
 
             await self.client.send_file(
@@ -546,7 +591,7 @@ class StreamingCloner:
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
-                thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
+                thumb=thumb_path if thumb_path else None,
                 attributes=[video_attrs] if video_attrs else None
             )
 
@@ -568,62 +613,118 @@ class StreamingCloner:
         """
         Clone de arquivo grande com STREAMING REAL.
         Download e upload em paralelo, nunca segura arquivo completo.
+        Agora também gera thumbnail para vídeos.
         """
-        
+        import tempfile
+
         file_name = self._get_file_name(msg)
         file_size = self._get_file_size(msg)
-        
+        is_video = msg.video is not None
+
         log.info(f"⚡ Streaming: {file_name} ({file_size/(1024*1024):.1f}MB)")
-        
+
         # Criar uploader
         uploader = StreamingUploader(self.client, file_size, file_name)
-        
+
+        # Para vídeos: salvar primeiros chunks para gerar thumbnail
+        tmp_dir = tempfile.gettempdir()
+        video_preview_path = os.path.join(tmp_dir, f"preview_{file_name}") if is_video else None
+        thumb_path = os.path.join(tmp_dir, f"thumb_{file_name}.jpg") if is_video else None
+        preview_bytes = 0
+        preview_file = None
+        thumb_generated = False
+        PREVIEW_SIZE = 3 * 1024 * 1024  # 3MB para gerar thumbnail (suficiente para primeiros frames)
+
+        if is_video:
+            preview_file = open(video_preview_path, 'wb')
+
         # Stream download → upload em paralelo
         part_index = 0
         bytes_processed = 0
         start_time = time.time()
-        
-        async for chunk in self.client.iter_download(
-            msg.media,
-            chunk_size=CHUNK_SIZE,
-            request_size=CHUNK_SIZE
-        ):
-            # Upload chunk (não bloqueia)
-            await uploader.upload_chunk(part_index, chunk)
-            
-            bytes_processed += len(chunk)
-            part_index += 1
-            
-            # Log progresso a cada 10%
-            progress = bytes_processed / file_size * 100
-            if int(progress) % 10 == 0 and int(progress) > 0:
-                elapsed = time.time() - start_time
-                speed = bytes_processed / elapsed / (1024 * 1024)
-                log.debug(f"  {progress:.0f}% ({speed:.1f} MB/s)")
-        
-        # Aguardar uploads pendentes
-        await uploader.wait_completion()
-        
-        # Finalizar: enviar mensagem com o arquivo
-        input_file = uploader.get_input_file()
-        
-        # Criar InputMedia baseado no tipo
-        media = self._create_input_media(msg, input_file)
-        
-        # Enviar
-        reply_to = InputReplyToMessage(reply_to_msg_id=target_topic) if target_topic else None
-        await self.client(SendMediaRequest(
-            peer=await self.client.get_input_entity(TARGET_CHAT),
-            media=media,
-            message=msg.text or "",
-            reply_to=reply_to
-        ))
-        
-        elapsed = time.time() - start_time
-        speed = file_size / elapsed / (1024 * 1024)
-        log.info(f"✓ Streaming: msg {msg.id} ({elapsed:.1f}s, {speed:.1f} MB/s)")
-        
-        return True
+
+        try:
+            async for chunk in self.client.iter_download(
+                msg.media,
+                chunk_size=CHUNK_SIZE,
+                request_size=CHUNK_SIZE
+            ):
+                # Upload chunk (não bloqueia)
+                await uploader.upload_chunk(part_index, chunk)
+
+                # Salvar para preview (apenas primeiros chunks de vídeo)
+                if is_video and preview_file and preview_bytes < PREVIEW_SIZE:
+                    preview_file.write(chunk)
+                    preview_bytes += len(chunk)
+
+                    # Quando temos dados suficientes, gerar thumbnail
+                    if preview_bytes >= PREVIEW_SIZE and not thumb_generated:
+                        preview_file.close()
+                        preview_file = None
+                        log.debug(f"Gerando thumbnail de vídeo grande...")
+                        thumb_generated = generate_video_thumbnail(video_preview_path, thumb_path)
+                        if thumb_generated:
+                            log.debug(f"✓ Thumbnail gerado para vídeo grande")
+
+                bytes_processed += len(chunk)
+                part_index += 1
+
+                # Log progresso a cada 10%
+                progress = bytes_processed / file_size * 100
+                if int(progress) % 10 == 0 and int(progress) > 0:
+                    elapsed = time.time() - start_time
+                    speed = bytes_processed / elapsed / (1024 * 1024)
+                    log.debug(f"  {progress:.0f}% ({speed:.1f} MB/s)")
+
+            # Fechar preview file se ainda aberto (vídeos muito pequenos em streaming)
+            if preview_file:
+                preview_file.close()
+                preview_file = None
+                # Tentar gerar thumbnail com o que temos
+                if is_video and not thumb_generated and preview_bytes > 0:
+                    thumb_generated = generate_video_thumbnail(video_preview_path, thumb_path)
+
+            # Aguardar uploads pendentes
+            await uploader.wait_completion()
+
+            # Fazer upload do thumbnail se gerado
+            thumb_input_file = None
+            if thumb_generated and thumb_path and os.path.exists(thumb_path):
+                try:
+                    thumb_input_file = await self.client.upload_file(thumb_path)
+                except Exception as e:
+                    log.warning(f"Falha no upload do thumbnail: {e}")
+                    thumb_input_file = None
+
+            # Finalizar: enviar mensagem com o arquivo
+            input_file = uploader.get_input_file()
+
+            # Criar InputMedia baseado no tipo (com thumbnail se disponível)
+            media = self._create_input_media(msg, input_file, thumb=thumb_input_file)
+
+            # Enviar
+            reply_to = InputReplyToMessage(reply_to_msg_id=target_topic) if target_topic else None
+            await self.client(SendMediaRequest(
+                peer=await self.client.get_input_entity(TARGET_CHAT),
+                media=media,
+                message=msg.text or "",
+                reply_to=reply_to
+            ))
+
+            elapsed = time.time() - start_time
+            speed = file_size / elapsed / (1024 * 1024)
+            log.info(f"✓ Streaming: msg {msg.id} ({elapsed:.1f}s, {speed:.1f} MB/s)")
+
+            return True
+
+        finally:
+            # Limpar arquivos temporários
+            if preview_file:
+                preview_file.close()
+            if video_preview_path and os.path.exists(video_preview_path):
+                os.remove(video_preview_path)
+            if thumb_path and os.path.exists(thumb_path):
+                os.remove(thumb_path)
     
     def _get_file_size(self, msg: Message) -> int:
         """Retorna tamanho do arquivo."""
@@ -685,12 +786,12 @@ class StreamingCloner:
 
         return attrs
     
-    def _create_input_media(self, msg: Message, input_file: InputFileBig):
-        """Cria InputMedia baseado no tipo original."""
-        
+    def _create_input_media(self, msg: Message, input_file: InputFileBig, thumb=None):
+        """Cria InputMedia baseado no tipo original, com suporte a thumbnail."""
+
         mime_type = "application/octet-stream"
         attributes = []
-        
+
         if msg.video:
             mime_type = msg.video.mime_type
             attributes = msg.video.attributes
@@ -700,11 +801,12 @@ class StreamingCloner:
         elif msg.audio:
             mime_type = msg.audio.mime_type
             attributes = msg.audio.attributes
-        
+
         return InputMediaUploadedDocument(
             file=input_file,
             mime_type=mime_type,
             attributes=attributes,
+            thumb=thumb,
             force_file=False
         )
 
