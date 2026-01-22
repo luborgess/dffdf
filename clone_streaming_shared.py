@@ -378,7 +378,7 @@ from PIL import Image
 def add_watermark_video(input_path: str, output_path: str) -> bool:
     """
     Adiciona watermark em vídeo usando FFmpeg.
-    Posiciona em diagonal: superior esquerdo e inferior direito.
+    Uma única logo grande no centro com efeito de deslizamento horizontal e 50% de transparência.
     """
     try:
         # Verificar tamanho do arquivo de entrada
@@ -387,11 +387,11 @@ def add_watermark_video(input_path: str, output_path: str) -> bool:
             log.warning(f"Arquivo de entrada muito pequeno: {input_size} bytes")
             return False
 
-        # Filtro complexo para 2 watermarks em diagonal
+        # Filtro: redimensiona para 40% da largura, adiciona alpha 50%, efeito de deslizamento
         filter_complex = (
-            '[1:v]scale=iw*0.225:-1,split=2[wm1][wm2];'
-            '[0:v][wm1]overlay=10:10[tmp1];'
-            '[tmp1][wm2]overlay=W-w-10:H-h-10'
+            '[1:v]scale=iw*0.40:-1[wm];'
+            '[wm]format=yuva420p,colorchannelmixer=aa=0.5[wm_alpha];'
+            '[0:v][wm_alpha]overlay=(W-w)/2:(H-h)/2:x=\'if(lt(x,-w),x+w-1,x)\''
         )
         cmd = [
             'ffmpeg', '-y',
@@ -500,24 +500,35 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
 
 
 def add_watermark_image(input_path: str, output_path: str) -> bool:
-    """Adiciona watermark em imagem usando Pillow."""
+    """
+    Adiciona watermark em imagem usando Pillow.
+    Uma única logo grande no centro com 50% de transparência.
+    """
     try:
         base = Image.open(input_path).convert('RGBA')
         watermark = Image.open(WATERMARK_PATH).convert('RGBA')
 
-        wm_width = int(base.width * 0.225)
+        # Redimensionar watermark para 40% da largura da imagem
+        wm_width = int(base.width * 0.40)
         wm_ratio = wm_width / watermark.width
         wm_height = int(watermark.height * wm_ratio)
         watermark = watermark.resize((wm_width, wm_height), Image.Resampling.LANCZOS)
 
-        positions = [
-            (10, 10),
-            (base.width - wm_width - 10, base.height - wm_height - 10),
-        ]
+        # Aplicar 50% de transparência
+        watermark_alpha = watermark.split()[3]
+        watermark_alpha = watermark_alpha.point(lambda p: int(p * 0.5))
+        watermark.putalpha(watermark_alpha)
 
-        for pos in positions:
-            base.paste(watermark, pos, watermark)
+        # Posição centralizada
+        pos = (
+            (base.width - wm_width) // 2,
+            (base.height - wm_height) // 2
+        )
 
+        # Aplicar watermark
+        base.paste(watermark, pos, watermark)
+
+        # Salvar
         if output_path.lower().endswith('.png'):
             base.save(output_path, 'PNG')
         else:
