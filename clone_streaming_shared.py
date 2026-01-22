@@ -1060,7 +1060,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 files_to_send,
-                caption=caption,
                 reply_to=target_topic
             )
 
@@ -1145,7 +1144,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
@@ -1226,14 +1224,13 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
                 thumb=thumb_path if thumb_generated else None,
                 attributes=[video_attrs] if video_attrs else None
             )
-            
+
             upload_time = time.time() - upload_start
             total_time = time.time() - start_time
             

@@ -803,7 +803,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 files_to_send,
-                caption=caption,
                 reply_to=target_topic
             )
 
@@ -888,7 +887,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
@@ -974,7 +972,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
