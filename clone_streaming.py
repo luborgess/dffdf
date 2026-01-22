@@ -14,8 +14,10 @@ import time
 import logging
 import hashlib
 import random
+import re
+import json
 from pathlib import Path
-from typing import AsyncGenerator, BinaryIO
+from typing import AsyncGenerator, BinaryIO, Optional
 
 from telethon import TelegramClient
 from telethon.tl.types import (
@@ -59,6 +61,10 @@ AUTO_CREATE_TOPICS = os.environ.get('AUTO_CREATE_TOPICS', 'true').lower() == 'tr
 
 # Topic mapping file (para persistência)
 TOPIC_MAP_FILE = 'topic_map.json'
+
+# User-to-topic mapping (para organizar mídias por usuário)
+USER_TOPIC_MAP_FILE = 'user_topic_map.json'
+ORGANIZE_BY_USER = os.environ.get('ORGANIZE_BY_USER', 'false').lower() == 'true'
 
 # Streaming config
 CHUNK_SIZE = 512 * 1024  # 512KB por chunk (máximo MTProto)
@@ -404,6 +410,143 @@ class TopicManager:
             log.error(f"Erro ao criar tópico '{topic_name}': {e}")
             return TARGET_TOPIC
 
+
+# ============================================================
+# USER TOPIC MANAGER (Organização por usuário)
+# ============================================================
+
+class UserTopicManager:
+    """
+    Gerencia organização de mídias por usuário.
+    Extrai username das legendas e cria/reutiliza tópicos por usuário.
+    """
+
+    # Padrões comuns para extrair username de legendas
+    USERNAME_PATTERNS = [
+        # "⭐ » Username Onlyfans" ou "★ » Username"
+        r'[⭐★]\s*»\s*([A-Za-z0-9_.-]+)',
+        # "@username"
+        r'@([A-Za-z0-9_]+)',
+        # "Username - Onlyfans" ou "Username | Onlyfans"
+        r'^([A-Za-z0-9_.-]+)\s*[-|]\s*(?:Onlyfans|OF)',
+        # "Onlyfans: Username" ou "OF: Username"
+        r'(?:Onlyfans|OF)[\s:]+([A-Za-z0-9_.-]+)',
+        # Apenas nome no início seguido de quebra de linha ou emoji
+        r'^([A-Za-z0-9_.-]{3,30})(?:\s*[\n🔥❤️💦]|$)',
+    ]
+
+    def __init__(self, client: TelegramClient):
+        self.client = client
+        self.user_map: dict[str, int] = {}  # username -> target_topic_id
+        self._load_map()
+
+    def _load_map(self):
+        """Carrega mapeamento de usuários do arquivo."""
+        if os.path.exists(USER_TOPIC_MAP_FILE):
+            try:
+                with open(USER_TOPIC_MAP_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.user_map = data.get('users', {})
+                log.info(f"👤 Carregado mapeamento de {len(self.user_map)} usuários")
+            except Exception as e:
+                log.warning(f"Erro ao carregar user_topic_map: {e}")
+
+    def _save_map(self):
+        """Salva mapeamento de usuários no arquivo."""
+        with open(USER_TOPIC_MAP_FILE, 'w') as f:
+            json.dump({'users': self.user_map}, f, indent=2, ensure_ascii=False)
+
+    def extract_username(self, caption: str) -> Optional[str]:
+        """
+        Extrai username de uma legenda.
+        Tenta múltiplos padrões até encontrar um match.
+        """
+        if not caption:
+            return None
+
+        # Limpar e normalizar
+        caption = caption.strip()
+
+        for pattern in self.USERNAME_PATTERNS:
+            match = re.search(pattern, caption, re.IGNORECASE | re.MULTILINE)
+            if match:
+                username = match.group(1).strip()
+                # Validar: deve ter pelo menos 2 caracteres
+                if len(username) >= 2:
+                    # Normalizar para lowercase
+                    return username.lower()
+
+        return None
+
+    def extract_username_from_messages(self, messages: list) -> Optional[str]:
+        """
+        Extrai username de uma lista de mensagens (álbum).
+        Prioriza a mensagem com legenda mais longa.
+        """
+        best_caption = ""
+        for msg in messages:
+            caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
+            if len(caption) > len(best_caption):
+                best_caption = caption
+
+        return self.extract_username(best_caption)
+
+    async def get_or_create_user_topic(self, username: str, target_chat: int) -> Optional[int]:
+        """
+        Retorna o tópico de destino para um usuário.
+        Cria automaticamente se não existir.
+        """
+        if not username:
+            return TARGET_TOPIC
+
+        if not FORUM_SUPPORT:
+            log.warning("Forum Topics não suportado para criação por usuário")
+            return TARGET_TOPIC
+
+        # Já existe no mapa?
+        if username in self.user_map:
+            return self.user_map[username]
+
+        # Criar tópico no destino
+        topic_name = f"📁 {username}"
+
+        try:
+            log.info(f"👤 Criando tópico para usuário: '{username}'")
+
+            result = await self.client(CreateForumTopicRequest(
+                channel=target_chat,
+                title=topic_name,
+                icon_color=0xFFD67E,  # Cor dourada para usuários
+                random_id=random.randrange(-2**62, 2**62)
+            ))
+
+            # O ID do tópico é o ID da primeira mensagem
+            new_topic_id = None
+            if hasattr(result, 'updates'):
+                for update in result.updates:
+                    if hasattr(update, 'message') and hasattr(update.message, 'id'):
+                        new_topic_id = update.message.id
+                        break
+
+            if new_topic_id:
+                self.user_map[username] = new_topic_id
+                self._save_map()
+                log.info(f"✓ Tópico criado para '{username}' (ID: {new_topic_id})")
+                return new_topic_id
+            else:
+                log.error(f"Não foi possível obter ID do tópico para '{username}'")
+                return TARGET_TOPIC
+
+        except FloodWaitError as e:
+            log.warning(f"FloodWait ao criar tópico de usuário: {e.seconds}s")
+            await asyncio.sleep(e.seconds + 1)
+            return await self.get_or_create_user_topic(username, target_chat)
+
+        except Exception as e:
+            log.error(f"Erro ao criar tópico para '{username}': {e}")
+            return TARGET_TOPIC
+
+
 # ============================================================
 # STREAMING UPLOADER
 # ============================================================
@@ -488,11 +631,14 @@ class StreamingCloner:
     Clonador com streaming real.
     Download e upload acontecem em paralelo.
     Suporta criação automática de tópicos.
+    Suporta organização por usuário e envio de álbuns.
     """
-    
-    def __init__(self, client: TelegramClient, topic_manager: TopicManager = None):
+
+    def __init__(self, client: TelegramClient, topic_manager: TopicManager = None,
+                 user_topic_manager: UserTopicManager = None):
         self.client = client
         self.topic_manager = topic_manager
+        self.user_topic_manager = user_topic_manager
         self.last_send_time = 0
     
     async def wait_rate_limit(self):
@@ -504,12 +650,22 @@ class StreamingCloner:
     
     async def clone_message(self, msg: Message) -> bool:
         """Clona uma mensagem com streaming."""
-        
+
         await self.wait_rate_limit()
-        
+
         # Determinar tópico de destino
         target_topic = TARGET_TOPIC
-        if AUTO_CREATE_TOPICS and self.topic_manager:
+
+        # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        if ORGANIZE_BY_USER and self.user_topic_manager:
+            caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
+            username = self.user_topic_manager.extract_username(caption)
+            if username:
+                target_topic = await self.user_topic_manager.get_or_create_user_topic(
+                    username, TARGET_CHAT
+                )
+                log.debug(f"👤 Mensagem para usuário: {username}")
+        elif AUTO_CREATE_TOPICS and self.topic_manager:
             source_topic_id = self.topic_manager.get_source_topic_id(msg)
             if source_topic_id:
                 target_topic = await self.topic_manager.get_or_create_target_topic(
@@ -569,7 +725,109 @@ class StreamingCloner:
         except Exception as e:
             log.error(f"✗ Erro msg {msg.id}: {e}")
             return False
-    
+
+    async def clone_album(self, messages: list[Message]) -> bool:
+        """
+        Clona um álbum (grupo de mídias com mesmo grouped_id).
+        Envia todas as mídias juntas com uma única legenda.
+        """
+        if not messages:
+            return False
+
+        if len(messages) == 1:
+            # Apenas uma mensagem, usar clone normal
+            return await self.clone_message(messages[0])
+
+        await self.wait_rate_limit()
+
+        # Extrair legenda (geralmente na primeira ou última mensagem com texto)
+        caption = ""
+        for msg in messages:
+            if msg.text:
+                caption = msg.text
+                break
+
+        # Determinar tópico de destino
+        target_topic = TARGET_TOPIC
+
+        # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        if ORGANIZE_BY_USER and self.user_topic_manager:
+            username = self.user_topic_manager.extract_username_from_messages(messages)
+            if username:
+                target_topic = await self.user_topic_manager.get_or_create_user_topic(
+                    username, TARGET_CHAT
+                )
+                log.info(f"👤 Álbum para usuário: {username} → tópico {target_topic}")
+        elif AUTO_CREATE_TOPICS and self.topic_manager:
+            # Fallback para topic_manager se não usar organização por usuário
+            source_topic_id = self.topic_manager.get_source_topic_id(messages[0])
+            if source_topic_id:
+                target_topic = await self.topic_manager.get_or_create_target_topic(
+                    source_topic_id, TARGET_CHAT
+                )
+
+        try:
+            # Download de todas as mídias
+            import tempfile
+            tmp_dir = tempfile.gettempdir()
+            files_to_send = []
+            tmp_files = []
+
+            log.info(f"📦 Álbum: {len(messages)} mídias (IDs: {[m.id for m in messages]})")
+
+            for msg in messages:
+                file_name = self._get_file_name(msg)
+                tmp_path = os.path.join(tmp_dir, f"album_{msg.id}_{file_name}")
+                wm_path = os.path.join(tmp_dir, f"wm_album_{msg.id}_{file_name}")
+                tmp_files.append(tmp_path)
+                tmp_files.append(wm_path)
+
+                await self.client.download_media(msg, file=tmp_path)
+
+                upload_path = tmp_path
+                is_video = msg.video is not None
+                is_photo = msg.photo is not None
+
+                # Aplicar watermark se habilitado
+                if WATERMARK_ENABLED:
+                    if is_video:
+                        if add_watermark_video(tmp_path, wm_path):
+                            upload_path = wm_path
+                    elif is_photo:
+                        if add_watermark_image(tmp_path, wm_path):
+                            upload_path = wm_path
+
+                files_to_send.append(upload_path)
+
+            # Enviar álbum (Telethon agrupa automaticamente quando enviamos lista)
+            await self.client.send_file(
+                TARGET_CHAT,
+                files_to_send,
+                caption=caption,
+                reply_to=target_topic
+            )
+
+            log.info(f"✓ Álbum: {len(messages)} mídias enviadas")
+
+            # Limpar arquivos temporários
+            for tmp_file in tmp_files:
+                if os.path.exists(tmp_file):
+                    try:
+                        os.remove(tmp_file)
+                    except:
+                        pass
+
+            return True
+
+        except FloodWaitError as e:
+            log.warning(f"FloodWait no álbum: {e.seconds}s")
+            await asyncio.sleep(e.seconds + 1)
+            return await self.clone_album(messages)
+
+        except Exception as e:
+            log.error(f"✗ Erro no álbum (IDs: {[m.id for m in messages]}): {e}")
+            return False
+
     async def _clone_small_file(self, msg: Message, target_topic: int = None) -> bool:
         """Clone de arquivo pequeno (cabe em RAM)."""
         import tempfile
@@ -973,30 +1231,79 @@ async def main():
     log.info(f"Destino: {TARGET_CHAT} (tópico: {TARGET_TOPIC})")
     log.info(f"Chunk size: {CHUNK_SIZE // 1024}KB")
     log.info(f"Parallel uploads: {PARALLEL_UPLOADS}")
+    log.info(f"Organizar por usuário: {'SIM' if ORGANIZE_BY_USER else 'NÃO'}")
     log.info("=" * 60)
-    
+
     last_id = load_checkpoint()
     if last_id:
         log.info(f"Resumindo de msg {last_id}")
-    
-    stats = {'ok': 0, 'fail': 0, 'bytes': 0}
+
+    stats = {'ok': 0, 'fail': 0, 'bytes': 0, 'albums': 0}
     start_time = time.time()
-    
+
     async with TelegramClient('cloner', API_ID, API_HASH) as client:
-        
+
         # Inicializar Topic Manager
         topic_manager = None
-        if AUTO_CREATE_TOPICS and FORUM_SUPPORT:
+        if AUTO_CREATE_TOPICS and FORUM_SUPPORT and not ORGANIZE_BY_USER:
             log.info("Topic Manager: ATIVADO")
             topic_manager = TopicManager(client)
             await topic_manager.load_source_topics(SOURCE_CHAT)
         elif AUTO_CREATE_TOPICS and not FORUM_SUPPORT:
             log.warning("AUTO_CREATE_TOPICS configurado mas Forum não suportado - ignorando")
-            
-        cloner = StreamingCloner(client, topic_manager=topic_manager)
-        
+
+        # Inicializar User Topic Manager
+        user_topic_manager = None
+        if ORGANIZE_BY_USER and FORUM_SUPPORT:
+            log.info("👤 User Topic Manager: ATIVADO")
+            user_topic_manager = UserTopicManager(client)
+        elif ORGANIZE_BY_USER and not FORUM_SUPPORT:
+            log.warning("ORGANIZE_BY_USER configurado mas Forum não suportado - ignorando")
+
+        cloner = StreamingCloner(
+            client,
+            topic_manager=topic_manager,
+            user_topic_manager=user_topic_manager
+        )
+
         log.info("Conectado! Buscando mensagens...")
-        
+
+        # Agrupar mensagens por grouped_id para detectar álbuns
+        current_album: list[Message] = []
+        current_grouped_id: int | None = None
+
+        async def flush_album():
+            """Processa e envia o álbum atual."""
+            nonlocal current_album, stats
+
+            if not current_album:
+                return
+
+            if len(current_album) == 1:
+                # Mensagem individual
+                msg = current_album[0]
+                success = await cloner.clone_message(msg)
+                if success:
+                    stats['ok'] += 1
+                    stats['bytes'] += cloner._get_file_size(msg) or 0
+                else:
+                    stats['fail'] += 1
+                save_checkpoint(msg.id)
+            else:
+                # Álbum de mídias
+                success = await cloner.clone_album(current_album)
+                if success:
+                    stats['ok'] += len(current_album)
+                    stats['albums'] += 1
+                    for msg in current_album:
+                        stats['bytes'] += cloner._get_file_size(msg) or 0
+                else:
+                    stats['fail'] += len(current_album)
+                # Salvar checkpoint do último ID do álbum
+                save_checkpoint(current_album[-1].id)
+
+            current_album = []
+
         async for msg in client.iter_messages(
             SOURCE_CHAT,
             min_id=last_id,
@@ -1010,32 +1317,46 @@ async def main():
                             continue
                     else:
                         continue
-            
-            success = await cloner.clone_message(msg)
-            
-            if success:
-                stats['ok'] += 1
-                stats['bytes'] += cloner._get_file_size(msg) or 0
+
+            # Verificar se é parte de um álbum
+            grouped_id = getattr(msg, 'grouped_id', None)
+
+            if grouped_id is None:
+                # Mensagem individual - processar álbum anterior primeiro
+                await flush_album()
+                current_album = [msg]
+                current_grouped_id = None
+                await flush_album()
+
+            elif grouped_id == current_grouped_id:
+                # Mesma album - adicionar à lista
+                current_album.append(msg)
+
             else:
-                stats['fail'] += 1
-            
-            save_checkpoint(msg.id)
-            
-            # Log a cada 10
+                # Novo álbum - processar anterior e iniciar novo
+                await flush_album()
+                current_album = [msg]
+                current_grouped_id = grouped_id
+
+            # Log a cada 10 mensagens processadas
             total = stats['ok'] + stats['fail']
-            if total % 10 == 0:
+            if total > 0 and total % 10 == 0:
                 elapsed = (time.time() - start_time) / 60
                 rate = total / elapsed if elapsed > 0 else 0
                 gb = stats['bytes'] / (1024**3)
                 log.info(
-                    f"Progresso: {stats['ok']} ok | "
+                    f"Progresso: {stats['ok']} ok | {stats['albums']} álbuns | "
                     f"{rate:.1f} msg/min | {gb:.2f} GB"
                 )
-    
+
+        # Processar último álbum pendente
+        await flush_album()
+
     elapsed = (time.time() - start_time) / 60
     log.info("=" * 60)
     log.info("CONCLUÍDO!")
-    log.info(f"Sucesso: {stats['ok']}")
+    log.info(f"Sucesso: {stats['ok']} mensagens")
+    log.info(f"Álbuns: {stats['albums']}")
     log.info(f"Falhas: {stats['fail']}")
     log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
     log.info(f"Tempo: {elapsed:.1f} minutos")
