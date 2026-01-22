@@ -32,3 +32,18 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+# SSH Keys (NUNCA commitar chave privada!)
+*.pem
+!oracle_vps.pub
+
+# OCI temp files
+oci_metadata.json
+shape_config.json
+# Sessions - arquivos gerados (não comitar)
+sessions/*/.env
+sessions/*/*.session
+sessions/*/*.session-journal
+sessions/*/checkpoint.txt
+sessions/*/clone.log
+sessions/*/topic_map.json
+sessions/*/output.log

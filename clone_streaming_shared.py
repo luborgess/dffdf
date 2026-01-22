@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Clone de grupo Telegram com STREAMING REAL.
-Nunca segura arquivo completo em memória.
+Clone de grupo Telegram com STREAMING REAL + CHECKPOINT COMPARTILHADO.
 
-Usa API MTProto de baixo nível para:
-- Download em chunks (iter_download)
-- Upload em chunks paralelos (saveBigFilePart)
+Versão multi-sessão com SQLite para coordenação entre múltiplas
+instâncias do script enviando para o mesmo target.
+
+Usa:
+- SQLite para checkpoint atômico (evita duplicação)
+- Lock por mensagem (uma sessão reserva, processa, marca como feita)
+- Suporte a múltiplos source chats → um target chat
 """
 
 import asyncio
@@ -14,8 +17,10 @@ import time
 import logging
 import hashlib
 import random
+import sqlite3
 from pathlib import Path
 from typing import AsyncGenerator, BinaryIO
+from contextlib import contextmanager
 
 from telethon import TelegramClient
 from telethon.tl.types import (
@@ -45,6 +50,9 @@ API_HASH = os.environ['TG_API_HASH']
 SOURCE_CHAT = int(os.environ['SOURCE_CHAT'])
 TARGET_CHAT = int(os.environ['TARGET_CHAT'])
 
+# Session name único para esta instância
+SESSION_NAME = os.environ.get('SESSION_NAME', 'session')
+
 # Helper para converter topic ID (trata string vazia)
 def _parse_topic(val):
     if not val or val.strip() == '':
@@ -68,8 +76,190 @@ BUFFER_CHUNKS = 20        # Chunks em buffer (~10MB)
 # Rate limit - Telegram permite ~30-50 msg/min
 MIN_INTERVAL = 1.3  # ~46 msg/min (seguro dentro do limite)
 
-# Checkpoint
-CHECKPOINT_FILE = 'checkpoint.txt'
+# ============================================================
+# CHECKPOINT SQLITE COMPARTILHADO
+# ============================================================
+
+# Caminho para o banco compartilhado
+# Usar caminho relativo para ../shared/ ou variável de ambiente
+SHARED_DB_PATH = os.environ.get('SHARED_DB_PATH', '../shared/checkpoint.db')
+
+class SharedCheckpoint:
+    """
+    Checkpoint compartilhado usando SQLite.
+    
+    Permite que múltiplas sessões trabalhem no mesmo target sem duplicação.
+    Cada mensagem é marcada com status:
+    - NULL: não processada
+    - 'processing': sendo processada (lock)
+    - 'done': concluída
+    - 'failed': falhou
+    """
+    
+    def __init__(self, db_path: str = SHARED_DB_PATH):
+        self.db_path = os.path.abspath(db_path)
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self._init_db()
+    
+    def _init_db(self):
+        """Inicializa banco de dados."""
+        with self._get_conn() as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    source_chat INTEGER NOT NULL,
+                    msg_id INTEGER NOT NULL,
+                    status TEXT DEFAULT NULL,
+                    session TEXT DEFAULT NULL,
+                    processed_at TIMESTAMP DEFAULT NULL,
+                    target_msg_id INTEGER DEFAULT NULL,
+                    PRIMARY KEY (source_chat, msg_id)
+                )
+            ''')
+            conn.execute('''
+                CREATE INDEX IF NOT EXISTS idx_status 
+                ON messages(source_chat, status)
+            ''')
+            conn.commit()
+    
+    @contextmanager
+    def _get_conn(self):
+        """Conexão com timeout e WAL mode para concorrência."""
+        conn = sqlite3.connect(
+            self.db_path, 
+            timeout=30.0,
+            isolation_level='IMMEDIATE'
+        )
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA busy_timeout=30000')
+        try:
+            yield conn
+        finally:
+            conn.close()
+    
+    def try_lock_message(self, source_chat: int, msg_id: int, session: str) -> bool:
+        """
+        Tenta fazer lock de uma mensagem para processamento.
+        
+        Returns:
+            True se conseguiu o lock (pode processar)
+            False se já está em processamento ou concluída
+        """
+        with self._get_conn() as conn:
+            try:
+                # Tentar inserir novo registro com status 'processing'
+                cursor = conn.execute('''
+                    INSERT INTO messages (source_chat, msg_id, status, session)
+                    VALUES (?, ?, 'processing', ?)
+                    ON CONFLICT(source_chat, msg_id) DO UPDATE SET
+                        status = CASE 
+                            WHEN messages.status IS NULL THEN 'processing'
+                            WHEN messages.status = 'failed' THEN 'processing'
+                            ELSE messages.status
+                        END,
+                        session = CASE
+                            WHEN messages.status IS NULL THEN excluded.session
+                            WHEN messages.status = 'failed' THEN excluded.session
+                            ELSE messages.session
+                        END
+                    WHERE messages.status IS NULL OR messages.status = 'failed'
+                ''', (source_chat, msg_id, session))
+                
+                conn.commit()
+                
+                # Verificar se realmente conseguimos o lock
+                cursor = conn.execute('''
+                    SELECT status, session FROM messages 
+                    WHERE source_chat = ? AND msg_id = ?
+                ''', (source_chat, msg_id))
+                
+                row = cursor.fetchone()
+                if row:
+                    status, locked_session = row
+                    return status == 'processing' and locked_session == session
+                
+                return False
+                
+            except sqlite3.IntegrityError:
+                # Já existe, verificar status
+                return False
+    
+    def mark_done(self, source_chat: int, msg_id: int, target_msg_id: int = None):
+        """Marca mensagem como processada com sucesso."""
+        with self._get_conn() as conn:
+            conn.execute('''
+                UPDATE messages 
+                SET status = 'done', 
+                    processed_at = datetime('now'),
+                    target_msg_id = ?
+                WHERE source_chat = ? AND msg_id = ?
+            ''', (target_msg_id, source_chat, msg_id))
+            conn.commit()
+    
+    def mark_failed(self, source_chat: int, msg_id: int):
+        """Marca mensagem como falha (pode ser reprocessada)."""
+        with self._get_conn() as conn:
+            conn.execute('''
+                UPDATE messages 
+                SET status = 'failed', processed_at = datetime('now')
+                WHERE source_chat = ? AND msg_id = ?
+            ''', (source_chat, msg_id))
+            conn.commit()
+    
+    def is_processed(self, source_chat: int, msg_id: int) -> bool:
+        """Verifica se mensagem já foi processada."""
+        with self._get_conn() as conn:
+            cursor = conn.execute('''
+                SELECT status FROM messages 
+                WHERE source_chat = ? AND msg_id = ?
+            ''', (source_chat, msg_id))
+            row = cursor.fetchone()
+            return row is not None and row[0] == 'done'
+    
+    def get_last_processed(self, source_chat: int) -> int:
+        """Retorna o último msg_id processado com sucesso."""
+        with self._get_conn() as conn:
+            cursor = conn.execute('''
+                SELECT MAX(msg_id) FROM messages 
+                WHERE source_chat = ? AND status = 'done'
+            ''', (source_chat,))
+            row = cursor.fetchone()
+            return row[0] if row and row[0] else 0
+    
+    def get_stats(self, source_chat: int = None) -> dict:
+        """Retorna estatísticas do checkpoint."""
+        with self._get_conn() as conn:
+            if source_chat:
+                cursor = conn.execute('''
+                    SELECT status, COUNT(*) FROM messages 
+                    WHERE source_chat = ?
+                    GROUP BY status
+                ''', (source_chat,))
+            else:
+                cursor = conn.execute('''
+                    SELECT status, COUNT(*) FROM messages 
+                    GROUP BY status
+                ''')
+            
+            stats = {'done': 0, 'processing': 0, 'failed': 0}
+            for row in cursor:
+                if row[0]:
+                    stats[row[0]] = row[1]
+            return stats
+    
+    def cleanup_stale_locks(self, max_age_minutes: int = 30):
+        """
+        Limpa locks antigos (sessões que morreram).
+        Mensagens em 'processing' há mais de X minutos voltam para NULL.
+        """
+        with self._get_conn() as conn:
+            conn.execute('''
+                UPDATE messages 
+                SET status = 'failed', session = NULL
+                WHERE status = 'processing' 
+                AND processed_at < datetime('now', ?)
+            ''', (f'-{max_age_minutes} minutes',))
+            conn.commit()
+
 
 # Watermark
 WATERMARK_PATH = os.path.expanduser('~/watermark.png')
@@ -86,7 +276,7 @@ WATERMARK_MAX_SIZE = WATERMARK_MAX_SIZE_MB * 1024 * 1024  # Converter para bytes
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s',
+    format=f'%(asctime)s | {SESSION_NAME} | %(levelname)s | %(message)s',
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler('clone.log')
@@ -172,12 +362,8 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
     
     Para vídeos grandes (is_preview=True), usa seeking após input (-i) para maior precisão,
     pois arquivos de preview podem não ter índice completo.
-
-    Returns:
-        True se thumbnail foi gerado com sucesso, False caso contrário.
     """
-    # Pontos de tempo para tentar extrair frame (em segundos)
-    # Inclui mais pontos para vídeos longos que podem ter keyframes esparsos
+    # Pontos de tempo para tentar extrair frame (inclui mais pontos para vídeos longos)
     time_points = ['0', '0.5', '1', '2', '3', '5', '10']
 
     for time_point in time_points:
@@ -185,7 +371,6 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
             # Para previews de vídeos grandes: -ss DEPOIS de -i (mais preciso, mais lento)
             # Para vídeos completos: -ss ANTES de -i (mais rápido, usa keyframe seeking)
             if is_preview:
-                # Modo preciso: decodifica desde o início até o timestamp
                 thumb_cmd = [
                     'ffmpeg', '-y',
                     '-i', video_path,
@@ -196,7 +381,6 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
                     thumb_path
                 ]
             else:
-                # Modo rápido: seek por keyframe
                 thumb_cmd = [
                     'ffmpeg', '-y',
                     '-ss', time_point,
@@ -207,24 +391,17 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
                     thumb_path
                 ]
 
-            result = subprocess.run(
-                thumb_cmd,
-                capture_output=True,
-                timeout=60  # Aumentar timeout para modo preciso
-            )
+            result = subprocess.run(thumb_cmd, capture_output=True, timeout=60)
 
-            # Verificar se FFmpeg teve sucesso
             if result.returncode != 0:
                 continue
 
-            # Verificar se arquivo foi criado e tem conteúdo válido
             if os.path.exists(thumb_path):
                 thumb_size = os.path.getsize(thumb_path)
-                if thumb_size > 100:  # Thumbnail válido tem pelo menos 100 bytes
+                if thumb_size > 100:
                     log.debug(f"Thumbnail gerado em t={time_point}s: {thumb_size} bytes")
                     return True
                 else:
-                    # Arquivo muito pequeno, provavelmente inválido
                     os.remove(thumb_path)
 
         except subprocess.TimeoutExpired:
@@ -239,31 +416,24 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
 
 
 def add_watermark_image(input_path: str, output_path: str) -> bool:
-    """
-    Adiciona watermark em imagem usando Pillow.
-    Posiciona em diagonal: superior esquerdo, centro e inferior direito.
-    """
+    """Adiciona watermark em imagem usando Pillow."""
     try:
         base = Image.open(input_path).convert('RGBA')
         watermark = Image.open(WATERMARK_PATH).convert('RGBA')
 
-        # Redimensionar watermark para 22.5% da largura da imagem (50% maior que 15%)
         wm_width = int(base.width * 0.225)
         wm_ratio = wm_width / watermark.width
         wm_height = int(watermark.height * wm_ratio)
         watermark = watermark.resize((wm_width, wm_height), Image.Resampling.LANCZOS)
 
-        # Posições em diagonal (sem o centro)
         positions = [
-            (10, 10),  # Superior esquerdo
-            (base.width - wm_width - 10, base.height - wm_height - 10),  # Inferior direito
+            (10, 10),
+            (base.width - wm_width - 10, base.height - wm_height - 10),
         ]
 
-        # Aplicar watermark em cada posição
         for pos in positions:
             base.paste(watermark, pos, watermark)
 
-        # Salvar
         if output_path.lower().endswith('.png'):
             base.save(output_path, 'PNG')
         else:
@@ -281,15 +451,12 @@ def add_watermark_image(input_path: str, output_path: str) -> bool:
 # ============================================================
 
 class TopicManager:
-    """
-    Gerencia criação automática de tópicos no destino.
-    Mapeia tópicos da origem para tópicos criados no destino.
-    """
+    """Gerencia criação automática de tópicos no destino."""
     
     def __init__(self, client: TelegramClient):
         self.client = client
-        self.topic_map: dict[int, int] = {}  # source_topic_id -> target_topic_id
-        self.source_topics: dict[int, str] = {}  # topic_id -> topic_name
+        self.topic_map: dict[int, int] = {}
+        self.source_topics: dict[int, str] = {}
         self._load_map()
     
     def _load_map(self):
@@ -317,7 +484,6 @@ class TopicManager:
     async def load_source_topics(self, source_chat: int):
         """Carrega informações dos tópicos do chat de origem."""
         if not FORUM_SUPPORT:
-            log.warning("Forum Topics não suportado - atualize Telethon para versão mais recente")
             return
         
         try:
@@ -339,33 +505,25 @@ class TopicManager:
     
     def get_source_topic_id(self, msg: Message) -> int | None:
         """Extrai o ID do tópico de uma mensagem."""
-        # Mensagem direta no tópico
         if hasattr(msg, 'reply_to') and msg.reply_to:
-            # reply_to_top_id = ID do tópico
             if hasattr(msg.reply_to, 'reply_to_top_id') and msg.reply_to.reply_to_top_id:
                 return msg.reply_to.reply_to_top_id
-            # Se reply_to_msg_id existe e é um tópico root
             if hasattr(msg.reply_to, 'reply_to_msg_id') and msg.reply_to.reply_to_msg_id:
                 if msg.reply_to.reply_to_msg_id in self.source_topics:
                     return msg.reply_to.reply_to_msg_id
         return None
     
     async def get_or_create_target_topic(self, source_topic_id: int, target_chat: int) -> int | None:
-        """
-        Retorna o tópico de destino correspondente.
-        Cria automaticamente se não existir.
-        """
+        """Retorna o tópico de destino correspondente."""
         if not source_topic_id:
             return TARGET_TOPIC
         
         if not FORUM_SUPPORT:
             return TARGET_TOPIC
         
-        # Já existe no mapa?
         if source_topic_id in self.topic_map:
             return self.topic_map[source_topic_id]
         
-        # Criar tópico no destino
         topic_name = self.source_topics.get(source_topic_id, f"Tópico {source_topic_id}")
         
         try:
@@ -374,11 +532,10 @@ class TopicManager:
             result = await self.client(CreateForumTopicRequest(
                 channel=target_chat,
                 title=topic_name,
-                icon_color=0x6FB9F0,  # Cor azul padrão
+                icon_color=0x6FB9F0,
                 random_id=random.randrange(-2**62, 2**62)
             ))
             
-            # O ID do tópico é o ID da primeira mensagem (updates)
             new_topic_id = None
             if hasattr(result, 'updates'):
                 for update in result.updates:
@@ -392,7 +549,6 @@ class TopicManager:
                 log.info(f"✓ Tópico criado: '{topic_name}' (ID: {new_topic_id})")
                 return new_topic_id
             else:
-                log.error(f"Não foi possível obter ID do tópico criado")
                 return TARGET_TOPIC
                 
         except FloodWaitError as e:
@@ -404,35 +560,23 @@ class TopicManager:
             log.error(f"Erro ao criar tópico '{topic_name}': {e}")
             return TARGET_TOPIC
 
+
 # ============================================================
 # STREAMING UPLOADER
 # ============================================================
 
 class StreamingUploader:
-    """
-    Upload de arquivo grande em streaming.
-    Não precisa ter o arquivo completo para começar.
-    """
+    """Upload de arquivo grande em streaming."""
     
     def __init__(self, client: TelegramClient, file_size: int, file_name: str):
         self.client = client
         self.file_size = file_size
         self.file_name = file_name
-        
-        # Gerar file_id único
         self.file_id = random.randrange(-2**62, 2**62)
-        
-        # Calcular total de partes
         self.total_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
-        
-        # Controle
         self.parts_uploaded = 0
         self.md5_hash = hashlib.md5()
-        
-        # Semáforo para limitar uploads paralelos
         self.semaphore = asyncio.Semaphore(PARALLEL_UPLOADS)
-        
-        # Fila de chunks pendentes
         self.pending_tasks = []
     
     async def upload_part(self, part_index: int, data: bytes) -> bool:
@@ -461,8 +605,6 @@ class StreamingUploader:
         """Agenda upload de um chunk (não bloqueia)."""
         task = asyncio.create_task(self.upload_part(part_index, data))
         self.pending_tasks.append(task)
-        
-        # Limpar tasks completadas
         self.pending_tasks = [t for t in self.pending_tasks if not t.done()]
     
     async def wait_completion(self):
@@ -480,30 +622,36 @@ class StreamingUploader:
 
 
 # ============================================================
-# CLONE COM STREAMING
+# CLONE COM STREAMING + CHECKPOINT COMPARTILHADO
 # ============================================================
 
 class StreamingCloner:
     """
-    Clonador com streaming real.
-    Download e upload acontecem em paralelo.
-    Suporta criação automática de tópicos.
+    Clonador com streaming real + checkpoint SQLite compartilhado.
+    Múltiplas sessões podem trabalhar sem duplicação.
     """
     
-    def __init__(self, client: TelegramClient, topic_manager: TopicManager = None):
+    def __init__(self, client: TelegramClient, checkpoint: SharedCheckpoint, 
+                 topic_manager: TopicManager = None):
         self.client = client
+        self.checkpoint = checkpoint
         self.topic_manager = topic_manager
         self.last_send_time = 0
     
     async def wait_rate_limit(self):
-        """Aguarda rate limit de 20 msgs/min."""
+        """Aguarda rate limit."""
         elapsed = time.time() - self.last_send_time
         if elapsed < MIN_INTERVAL:
             await asyncio.sleep(MIN_INTERVAL - elapsed)
         self.last_send_time = time.time()
     
     async def clone_message(self, msg: Message) -> bool:
-        """Clona uma mensagem com streaming."""
+        """Clona uma mensagem com streaming e checkpoint compartilhado."""
+        
+        # Tentar fazer lock da mensagem
+        if not self.checkpoint.try_lock_message(SOURCE_CHAT, msg.id, SESSION_NAME):
+            log.debug(f"⊘ Msg {msg.id} já em processamento ou concluída")
+            return False
         
         await self.wait_rate_limit()
         
@@ -519,20 +667,26 @@ class StreamingCloner:
         try:
             # ===== TEXTO =====
             if msg.text and not msg.media:
-                await self.client.send_message(
+                result = await self.client.send_message(
                     TARGET_CHAT,
                     msg.text,
                     reply_to=target_topic
                 )
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id, result.id if result else None)
                 log.info(f"✓ Texto: msg {msg.id}")
                 return True
             
-            # ===== MÍDIA PEQUENA (<10MB) - download normal =====
+            # ===== MÍDIA PEQUENA (<10MB) =====
             if msg.media:
                 file_size = self._get_file_size(msg)
                 
                 if file_size and file_size < 10 * 1024 * 1024:
-                    return await self._clone_small_file(msg, target_topic)
+                    success = await self._clone_small_file(msg, target_topic)
+                    if success:
+                        self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                    else:
+                        self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
+                    return success
                 
                 # ===== MÍDIA GRANDE =====
                 if file_size and file_size >= 10 * 1024 * 1024:
@@ -542,7 +696,6 @@ class StreamingCloner:
                     # 1. Watermark habilitada
                     # 2. É vídeo
                     # 3. Tamanho <= limite (WATERMARK_MAX_SIZE_MB)
-                    #    Se limite = 0, aplica em todos (pode ser muito lento!)
                     should_watermark = (
                         WATERMARK_ENABLED and 
                         is_video and 
@@ -550,24 +703,32 @@ class StreamingCloner:
                     )
                     
                     if should_watermark:
-                        return await self._clone_large_video_with_watermark(msg, target_topic)
+                        success = await self._clone_large_video_with_watermark(msg, target_topic)
+                    else:
+                        # Streaming puro: vídeos acima do limite ou outros arquivos
+                        if is_video and WATERMARK_ENABLED and file_size > WATERMARK_MAX_SIZE:
+                            log.info(f"⚠ Vídeo muito grande ({file_size/(1024*1024):.0f}MB > {WATERMARK_MAX_SIZE_MB}MB), streaming sem watermark")
+                        success = await self._clone_large_file_streaming(msg, target_topic)
                     
-                    # Streaming puro: vídeos acima do limite ou outros arquivos
-                    if is_video and WATERMARK_ENABLED and file_size > WATERMARK_MAX_SIZE:
-                        log.info(f"⚠ Vídeo muito grande ({file_size/(1024*1024):.0f}MB > {WATERMARK_MAX_SIZE_MB}MB), streaming sem watermark")
-                    
-                    return await self._clone_large_file_streaming(msg, target_topic)
+                    if success:
+                        self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                    else:
+                        self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
+                    return success
             
             log.warning(f"⊘ Tipo não suportado: msg {msg.id}")
+            self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
             return False
             
         except FloodWaitError as e:
             log.warning(f"FloodWait: {e.seconds}s")
             await asyncio.sleep(e.seconds + 1)
+            # Não marcar como falha, vai tentar de novo
             return await self.clone_message(msg)
             
         except Exception as e:
             log.error(f"✗ Erro msg {msg.id}: {e}")
+            self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
             return False
     
     async def _clone_small_file(self, msg: Message, target_topic: int = None) -> bool:
@@ -579,7 +740,6 @@ class StreamingCloner:
 
         log.info(f"↓↑ Pequeno: {file_name} ({file_size/(1024*1024):.1f}MB)")
 
-        # Download para arquivo temporário com nome correto
         tmp_dir = tempfile.gettempdir()
         tmp_path = os.path.join(tmp_dir, file_name)
         wm_path = os.path.join(tmp_dir, f"wm_{file_name}")
@@ -587,13 +747,11 @@ class StreamingCloner:
         try:
             await self.client.download_media(msg, file=tmp_path)
 
-            # Detectar tipo de mídia
             is_video = msg.video is not None
             is_photo = msg.photo is not None
             supports_streaming = False
-            upload_path = tmp_path  # Por padrão, enviar arquivo original
+            upload_path = tmp_path
 
-            # Aplicar watermark se habilitado
             if WATERMARK_ENABLED:
                 if is_video:
                     log.info(f"🎬 Aplicando watermark em vídeo...")
@@ -611,18 +769,15 @@ class StreamingCloner:
                     else:
                         log.warning(f"⚠ Falha na watermark, enviando original")
 
-            # Preparar atributos e thumbnail para vídeos
             video_attrs = None
             thumb_path = None
             if is_video:
-                # Extrair atributos do vídeo original
                 for attr in (msg.video.attributes if msg.video else []):
                     if isinstance(attr, DocumentAttributeVideo):
                         supports_streaming = getattr(attr, 'supports_streaming', True)
                         video_attrs = attr
                         break
 
-                # Gerar thumbnail do vídeo processado (função robusta com múltiplos fallbacks)
                 thumb_path = os.path.join(tmp_dir, f"thumb_{file_name}.jpg")
                 if not generate_video_thumbnail(upload_path, thumb_path):
                     thumb_path = None
@@ -638,7 +793,6 @@ class StreamingCloner:
                 attributes=[video_attrs] if video_attrs else None
             )
 
-            # Limpar thumbnail
             if thumb_path and os.path.exists(thumb_path):
                 os.remove(thumb_path)
 
@@ -646,7 +800,6 @@ class StreamingCloner:
             return True
 
         finally:
-            # Limpar arquivos temporários
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
             if os.path.exists(wm_path):
@@ -658,8 +811,6 @@ class StreamingCloner:
         
         Requer download completo → processamento FFmpeg → upload.
         Mais lento que streaming puro, mas aplica a marca d'água.
-        
-        Para vídeos muito grandes, isso pode demorar bastante.
         """
         import tempfile
 
@@ -668,7 +819,6 @@ class StreamingCloner:
 
         log.info(f"🎬 Grande c/ watermark: {file_name} ({file_size/(1024*1024):.1f}MB)")
 
-        # Diretório temporário com espaço suficiente
         tmp_dir = tempfile.gettempdir()
         tmp_path = os.path.join(tmp_dir, file_name)
         wm_path = os.path.join(tmp_dir, f"wm_{file_name}")
@@ -687,7 +837,7 @@ class StreamingCloner:
             log.info(f"🖌 Aplicando watermark em vídeo grande...")
             wm_start = time.time()
             
-            upload_path = tmp_path  # Por padrão, enviar original se watermark falhar
+            upload_path = tmp_path
             if add_watermark_video(tmp_path, wm_path):
                 upload_path = wm_path
                 wm_time = time.time() - wm_start
@@ -735,7 +885,6 @@ class StreamingCloner:
             return False
 
         finally:
-            # Limpar arquivos temporários
             for path in [tmp_path, wm_path, thumb_path]:
                 if path and os.path.exists(path):
                     try:
@@ -744,14 +893,7 @@ class StreamingCloner:
                         pass
     
     async def _clone_large_file_streaming(self, msg: Message, target_topic: int = None) -> bool:
-        """
-        Clone de arquivo grande com STREAMING REAL.
-        Download e upload em paralelo, nunca segura arquivo completo.
-        Agora também gera thumbnail para vídeos.
-        
-        NOTA: Watermark não é aplicada em streaming puro por limitação técnica.
-        Para vídeos que precisam de watermark, use _clone_large_file_with_watermark.
-        """
+        """Clone de arquivo grande com STREAMING REAL."""
         import tempfile
 
         file_name = self._get_file_name(msg)
@@ -760,10 +902,8 @@ class StreamingCloner:
 
         log.info(f"⚡ Streaming: {file_name} ({file_size/(1024*1024):.1f}MB)")
 
-        # Criar uploader
         uploader = StreamingUploader(self.client, file_size, file_name)
 
-        # Para vídeos: salvar primeiros chunks para gerar thumbnail
         tmp_dir = tempfile.gettempdir()
         video_preview_path = os.path.join(tmp_dir, f"preview_{file_name}") if is_video else None
         thumb_path = os.path.join(tmp_dir, f"thumb_{file_name}.jpg") if is_video else None
@@ -776,7 +916,6 @@ class StreamingCloner:
         if is_video:
             preview_file = open(video_preview_path, 'wb')
 
-        # Stream download → upload em paralelo
         part_index = 0
         bytes_processed = 0
         start_time = time.time()
@@ -787,20 +926,16 @@ class StreamingCloner:
                 chunk_size=CHUNK_SIZE,
                 request_size=CHUNK_SIZE
             ):
-                # Upload chunk (não bloqueia)
                 await uploader.upload_chunk(part_index, chunk)
 
-                # Salvar para preview (apenas primeiros chunks de vídeo)
                 if is_video and preview_file and preview_bytes < PREVIEW_SIZE:
                     preview_file.write(chunk)
                     preview_bytes += len(chunk)
 
-                    # Quando temos dados suficientes, gerar thumbnail
                     if preview_bytes >= PREVIEW_SIZE and not thumb_generated:
                         preview_file.close()
                         preview_file = None
                         log.debug(f"Gerando thumbnail de vídeo grande (preview={preview_bytes/(1024*1024):.1f}MB)...")
-                        # is_preview=True usa seeking preciso (mais lento, mas funciona com arquivos parciais)
                         thumb_generated = generate_video_thumbnail(video_preview_path, thumb_path, is_preview=True)
                         if thumb_generated:
                             log.debug(f"✓ Thumbnail gerado para vídeo grande")
@@ -808,25 +943,20 @@ class StreamingCloner:
                 bytes_processed += len(chunk)
                 part_index += 1
 
-                # Log progresso a cada 10%
                 progress = bytes_processed / file_size * 100
                 if int(progress) % 10 == 0 and int(progress) > 0:
                     elapsed = time.time() - start_time
                     speed = bytes_processed / elapsed / (1024 * 1024)
                     log.debug(f"  {progress:.0f}% ({speed:.1f} MB/s)")
 
-            # Fechar preview file se ainda aberto (vídeos muito pequenos em streaming)
             if preview_file:
                 preview_file.close()
                 preview_file = None
-                # Tentar gerar thumbnail com o que temos
                 if is_video and not thumb_generated and preview_bytes > 0:
                     thumb_generated = generate_video_thumbnail(video_preview_path, thumb_path, is_preview=True)
 
-            # Aguardar uploads pendentes
             await uploader.wait_completion()
 
-            # Fazer upload do thumbnail se gerado
             thumb_input_file = None
             if thumb_generated and thumb_path and os.path.exists(thumb_path):
                 try:
@@ -835,13 +965,9 @@ class StreamingCloner:
                     log.warning(f"Falha no upload do thumbnail: {e}")
                     thumb_input_file = None
 
-            # Finalizar: enviar mensagem com o arquivo
             input_file = uploader.get_input_file()
-
-            # Criar InputMedia baseado no tipo (com thumbnail se disponível)
             media = self._create_input_media(msg, input_file, thumb=thumb_input_file)
 
-            # Enviar
             reply_to = InputReplyToMessage(reply_to_msg_id=target_topic) if target_topic else None
             await self.client(SendMediaRequest(
                 peer=await self.client.get_input_entity(TARGET_CHAT),
@@ -857,7 +983,6 @@ class StreamingCloner:
             return True
 
         finally:
-            # Limpar arquivos temporários
             if preview_file:
                 preview_file.close()
             if video_preview_path and os.path.exists(video_preview_path):
@@ -881,53 +1006,28 @@ class StreamingCloner:
     
     def _get_file_name(self, msg: Message) -> str:
         """Retorna nome do arquivo."""
-        # Verificar documento
         if msg.document:
             for attr in msg.document.attributes:
                 if isinstance(attr, DocumentAttributeFilename):
                     return attr.file_name
-        # Verificar vídeo
         if msg.video:
             for attr in msg.video.attributes:
                 if isinstance(attr, DocumentAttributeFilename):
                     return attr.file_name
-            # Vídeos podem não ter filename, gerar com extensão correta
             ext = msg.video.mime_type.split('/')[-1] if msg.video.mime_type else 'mp4'
             return f"video_{msg.id}.{ext}"
-        # Verificar áudio
         if msg.audio:
             for attr in msg.audio.attributes:
                 if isinstance(attr, DocumentAttributeFilename):
                     return attr.file_name
             ext = msg.audio.mime_type.split('/')[-1] if msg.audio.mime_type else 'mp3'
             return f"audio_{msg.id}.{ext}"
-        # Verificar foto
         if msg.photo:
             return f"photo_{msg.id}.jpg"
         return f"file_{msg.id}"
     
-    def _get_attributes(self, msg: Message, override_filename: str = None) -> list:
-        """Retorna atributos do documento, opcionalmente substituindo o filename."""
-        attrs = []
-        if msg.document:
-            attrs = list(msg.document.attributes)
-        elif msg.video:
-            attrs = list(msg.video.attributes)
-        elif msg.audio:
-            attrs = list(msg.audio.attributes)
-
-        # Se precisar sobrescrever o filename
-        if override_filename:
-            # Remove qualquer DocumentAttributeFilename existente
-            attrs = [a for a in attrs if not isinstance(a, DocumentAttributeFilename)]
-            # Adiciona o novo
-            attrs.append(DocumentAttributeFilename(file_name=override_filename))
-
-        return attrs
-    
     def _create_input_media(self, msg: Message, input_file: InputFileBig, thumb=None):
-        """Cria InputMedia baseado no tipo original, com suporte a thumbnail."""
-
+        """Cria InputMedia baseado no tipo original."""
         mime_type = "application/octet-stream"
         attributes = []
 
@@ -954,35 +1054,30 @@ class StreamingCloner:
 # MAIN
 # ============================================================
 
-def load_checkpoint() -> int:
-    if os.path.exists(CHECKPOINT_FILE):
-        with open(CHECKPOINT_FILE) as f:
-            return int(f.read().strip())
-    return 0
-
-def save_checkpoint(msg_id: int):
-    with open(CHECKPOINT_FILE, 'w') as f:
-        f.write(str(msg_id))
-
-
 async def main():
     log.info("=" * 60)
-    log.info("TELEGRAM STREAMING CLONER")
+    log.info(f"TELEGRAM STREAMING CLONER - {SESSION_NAME}")
     log.info("=" * 60)
     log.info(f"Origem: {SOURCE_CHAT} (tópico: {SOURCE_TOPIC})")
     log.info(f"Destino: {TARGET_CHAT} (tópico: {TARGET_TOPIC})")
+    log.info(f"Checkpoint DB: {os.path.abspath(SHARED_DB_PATH)}")
     log.info(f"Chunk size: {CHUNK_SIZE // 1024}KB")
-    log.info(f"Parallel uploads: {PARALLEL_UPLOADS}")
     log.info("=" * 60)
     
-    last_id = load_checkpoint()
-    if last_id:
-        log.info(f"Resumindo de msg {last_id}")
+    # Inicializar checkpoint compartilhado
+    checkpoint = SharedCheckpoint(SHARED_DB_PATH)
     
-    stats = {'ok': 0, 'fail': 0, 'bytes': 0}
+    # Limpar locks antigos (sessões mortas)
+    checkpoint.cleanup_stale_locks(max_age_minutes=30)
+    
+    # Estatísticas iniciais
+    stats_db = checkpoint.get_stats(SOURCE_CHAT)
+    log.info(f"Checkpoint: {stats_db['done']} feitas | {stats_db['processing']} em andamento | {stats_db['failed']} falhas")
+    
+    stats = {'ok': 0, 'fail': 0, 'skip': 0, 'bytes': 0}
     start_time = time.time()
     
-    async with TelegramClient('cloner', API_ID, API_HASH) as client:
+    async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as client:
         
         # Inicializar Topic Manager
         topic_manager = None
@@ -990,16 +1085,14 @@ async def main():
             log.info("Topic Manager: ATIVADO")
             topic_manager = TopicManager(client)
             await topic_manager.load_source_topics(SOURCE_CHAT)
-        elif AUTO_CREATE_TOPICS and not FORUM_SUPPORT:
-            log.warning("AUTO_CREATE_TOPICS configurado mas Forum não suportado - ignorando")
             
-        cloner = StreamingCloner(client, topic_manager=topic_manager)
+        cloner = StreamingCloner(client, checkpoint, topic_manager=topic_manager)
         
         log.info("Conectado! Buscando mensagens...")
         
         async for msg in client.iter_messages(
             SOURCE_CHAT,
-            min_id=last_id,
+            min_id=0,  # Começar do início, checkpoint vai filtrar
             reverse=True
         ):
             # Filtrar por tópico
@@ -1011,24 +1104,28 @@ async def main():
                     else:
                         continue
             
+            # Verificar se já foi processada
+            if checkpoint.is_processed(SOURCE_CHAT, msg.id):
+                stats['skip'] += 1
+                continue
+            
             success = await cloner.clone_message(msg)
             
             if success:
                 stats['ok'] += 1
                 stats['bytes'] += cloner._get_file_size(msg) or 0
-            else:
+            elif success is False and not checkpoint.is_processed(SOURCE_CHAT, msg.id):
+                # Falha real (não skip por lock)
                 stats['fail'] += 1
-            
-            save_checkpoint(msg.id)
             
             # Log a cada 10
             total = stats['ok'] + stats['fail']
-            if total % 10 == 0:
+            if total > 0 and total % 10 == 0:
                 elapsed = (time.time() - start_time) / 60
                 rate = total / elapsed if elapsed > 0 else 0
                 gb = stats['bytes'] / (1024**3)
                 log.info(
-                    f"Progresso: {stats['ok']} ok | "
+                    f"Progresso: {stats['ok']} ok | {stats['skip']} skip | "
                     f"{rate:.1f} msg/min | {gb:.2f} GB"
                 )
     
@@ -1036,6 +1133,7 @@ async def main():
     log.info("=" * 60)
     log.info("CONCLUÍDO!")
     log.info(f"Sucesso: {stats['ok']}")
+    log.info(f"Puladas (já feitas): {stats['skip']}")
     log.info(f"Falhas: {stats['fail']}")
     log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
     log.info(f"Tempo: {elapsed:.1f} minutos")
