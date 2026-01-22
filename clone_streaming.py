@@ -19,6 +19,10 @@ import json
 from pathlib import Path
 from typing import AsyncGenerator, BinaryIO, Optional
 
+# Carregar variáveis de ambiente do arquivo .env
+from dotenv import load_dotenv
+load_dotenv()
+
 from telethon import TelegramClient
 from telethon.tl.types import (
     Message, DocumentAttributeVideo, DocumentAttributeFilename,

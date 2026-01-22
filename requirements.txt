@@ -7,5 +7,11 @@ telethon>=1.36.0
 # Aceleração de criptografia MTProto (opcional mas recomendado)
 cryptg>=0.4.0
 
+# Carregar variáveis de ambiente do arquivo .env
+python-dotenv>=1.0.0
+
+# Processamento de imagem para watermark
+Pillow>=10.0.0
+
 # AWS SDK
 boto3>=1.34.0
