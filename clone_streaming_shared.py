@@ -18,9 +18,15 @@ import logging
 import hashlib
 import random
 import sqlite3
+import re
+import json
 from pathlib import Path
-from typing import AsyncGenerator, BinaryIO
+from typing import AsyncGenerator, BinaryIO, Optional
 from contextlib import contextmanager
+
+# Carregar variáveis de ambiente do arquivo .env
+from dotenv import load_dotenv
+load_dotenv()
 
 from telethon import TelegramClient
 from telethon.tl.types import (
@@ -67,6 +73,23 @@ AUTO_CREATE_TOPICS = os.environ.get('AUTO_CREATE_TOPICS', 'true').lower() == 'tr
 
 # Topic mapping file (para persistência)
 TOPIC_MAP_FILE = 'topic_map.json'
+
+# User-to-topic mapping (para organizar mídias por usuário)
+USER_TOPIC_MAP_FILE = 'user_topic_map.json'
+ORGANIZE_BY_USER = os.environ.get('ORGANIZE_BY_USER', 'false').lower() == 'true'
+
+# Filtrar apenas um usuário específico (ex: "usuario123")
+# Se definido, apenas álbuns deste usuário serão processados
+FILTER_USER = os.environ.get('FILTER_USER', '').strip().lower()
+
+# Modo scan: apenas lista usuários encontrados sem baixar nada
+SCAN_USERS_ONLY = os.environ.get('SCAN_USERS_ONLY', 'false').lower() == 'true'
+
+# Arquivo JSON para salvar/carregar lista de usuários encontrados no scan
+USERS_JSON_FILE = 'users_found.json'
+
+# Filtrar usuários do arquivo JSON
+FILTER_FROM_JSON = os.environ.get('FILTER_FROM_JSON', 'false').lower() == 'true'
 
 # Streaming config
 CHUNK_SIZE = 512 * 1024  # 512KB por chunk (máximo MTProto)
@@ -116,8 +139,18 @@ class SharedCheckpoint:
                 )
             ''')
             conn.execute('''
-                CREATE INDEX IF NOT EXISTS idx_status 
+                CREATE INDEX IF NOT EXISTS idx_status
                 ON messages(source_chat, status)
+            ''')
+            # Tabela para mapeamento de usuários (para ORGANIZE_BY_USER)
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS user_topics (
+                    username TEXT PRIMARY KEY,
+                    topic_id INTEGER DEFAULT NULL,
+                    status TEXT DEFAULT NULL,
+                    session TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             ''')
             conn.commit()
     
@@ -225,6 +258,74 @@ class SharedCheckpoint:
             row = cursor.fetchone()
             return row[0] if row and row[0] else 0
     
+    def get_or_create_user_topic(self, username: str, session: str) -> tuple[int | None, bool]:
+        """
+        Obtém ou reserva um tópico para um usuário de forma atômica.
+
+        Returns:
+            (topic_id, is_new): topic_id existente ou None se precisa criar, is_new indica se é novo
+        """
+        with self._get_conn() as conn:
+            # Verificar se já existe
+            cursor = conn.execute('''
+                SELECT topic_id FROM user_topics WHERE username = ?
+            ''', (username,))
+            row = cursor.fetchone()
+
+            if row and row[0]:
+                return row[0], False
+
+            # Tentar reservar para criação
+            try:
+                conn.execute('''
+                    INSERT INTO user_topics (username, status, session)
+                    VALUES (?, 'creating', ?)
+                    ON CONFLICT(username) DO UPDATE SET
+                        status = CASE
+                            WHEN user_topics.status IS NULL THEN 'creating'
+                            ELSE user_topics.status
+                        END,
+                        session = CASE
+                            WHEN user_topics.status IS NULL THEN excluded.session
+                            ELSE user_topics.session
+                        END
+                    WHERE user_topics.topic_id IS NULL
+                ''', (username, session))
+                conn.commit()
+
+                # Verificar se conseguimos o lock
+                cursor = conn.execute('''
+                    SELECT status, session FROM user_topics WHERE username = ?
+                ''', (username,))
+                row = cursor.fetchone()
+                if row and row[0] == 'creating' and row[1] == session:
+                    return None, True  # Precisa criar
+
+                # Outra sessão está criando, esperar
+                return None, False
+
+            except sqlite3.IntegrityError:
+                return None, False
+
+    def set_user_topic(self, username: str, topic_id: int):
+        """Define o topic_id para um usuário após criação."""
+        with self._get_conn() as conn:
+            conn.execute('''
+                UPDATE user_topics
+                SET topic_id = ?, status = 'done'
+                WHERE username = ?
+            ''', (topic_id, username))
+            conn.commit()
+
+    def get_user_topic(self, username: str) -> int | None:
+        """Obtém o topic_id de um usuário."""
+        with self._get_conn() as conn:
+            cursor = conn.execute('''
+                SELECT topic_id FROM user_topics WHERE username = ? AND topic_id IS NOT NULL
+            ''', (username,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+
     def get_stats(self, source_chat: int = None) -> dict:
         """Retorna estatísticas do checkpoint."""
         with self._get_conn() as conn:
@@ -294,7 +395,7 @@ from PIL import Image
 def add_watermark_video(input_path: str, output_path: str) -> bool:
     """
     Adiciona watermark em vídeo usando FFmpeg.
-    Posiciona em diagonal: superior esquerdo e inferior direito.
+    Uma única logo grande no centro com efeito de deslizamento horizontal e 50% de transparência.
     """
     try:
         # Verificar tamanho do arquivo de entrada
@@ -303,11 +404,11 @@ def add_watermark_video(input_path: str, output_path: str) -> bool:
             log.warning(f"Arquivo de entrada muito pequeno: {input_size} bytes")
             return False
 
-        # Filtro complexo para 2 watermarks em diagonal
+        # Filtro: redimensiona para 40% da largura, adiciona alpha 50%, efeito de deslizamento
         filter_complex = (
-            '[1:v]scale=iw*0.225:-1,split=2[wm1][wm2];'
-            '[0:v][wm1]overlay=10:10[tmp1];'
-            '[tmp1][wm2]overlay=W-w-10:H-h-10'
+            '[1:v]scale=iw*0.40:-1[wm];'
+            '[wm]format=yuva420p,colorchannelmixer=aa=0.5[wm_alpha];'
+            '[0:v][wm_alpha]overlay=(W-w)/2:(H-h)/2:x=\'if(lt(x,-w),x+w-1,x)\''
         )
         cmd = [
             'ffmpeg', '-y',
@@ -416,24 +517,35 @@ def generate_video_thumbnail(video_path: str, thumb_path: str, is_preview: bool 
 
 
 def add_watermark_image(input_path: str, output_path: str) -> bool:
-    """Adiciona watermark em imagem usando Pillow."""
+    """
+    Adiciona watermark em imagem usando Pillow.
+    Uma única logo grande no centro com 50% de transparência.
+    """
     try:
         base = Image.open(input_path).convert('RGBA')
         watermark = Image.open(WATERMARK_PATH).convert('RGBA')
 
-        wm_width = int(base.width * 0.225)
+        # Redimensionar watermark para 40% da largura da imagem
+        wm_width = int(base.width * 0.40)
         wm_ratio = wm_width / watermark.width
         wm_height = int(watermark.height * wm_ratio)
         watermark = watermark.resize((wm_width, wm_height), Image.Resampling.LANCZOS)
 
-        positions = [
-            (10, 10),
-            (base.width - wm_width - 10, base.height - wm_height - 10),
-        ]
+        # Aplicar 50% de transparência
+        watermark_alpha = watermark.split()[3]
+        watermark_alpha = watermark_alpha.point(lambda p: int(p * 0.5))
+        watermark.putalpha(watermark_alpha)
 
-        for pos in positions:
-            base.paste(watermark, pos, watermark)
+        # Posição centralizada
+        pos = (
+            (base.width - wm_width) // 2,
+            (base.height - wm_height) // 2
+        )
 
+        # Aplicar watermark
+        base.paste(watermark, pos, watermark)
+
+        # Salvar
         if output_path.lower().endswith('.png'):
             base.save(output_path, 'PNG')
         else:
@@ -562,6 +674,149 @@ class TopicManager:
 
 
 # ============================================================
+# USER TOPIC MANAGER (Organização por usuário)
+# ============================================================
+
+class UserTopicManager:
+    """
+    Gerencia organização de mídias por usuário.
+    Extrai username das legendas e cria/reutiliza tópicos por usuário.
+    Usa SharedCheckpoint (SQLite) para coordenação entre múltiplas sessões.
+    """
+
+    # Padrões comuns para extrair username de legendas
+    USERNAME_PATTERNS = [
+        # "⭐ » Username Onlyfans" ou "★ » Username"
+        r'[⭐★]\s*»\s*([A-Za-z0-9_.-]+)',
+        # "@username"
+        r'@([A-Za-z0-9_]+)',
+        # "Username - Onlyfans" ou "Username | Onlyfans"
+        r'^([A-Za-z0-9_.-]+)\s*[-|]\s*(?:Onlyfans|OF)',
+        # "Onlyfans: Username" ou "OF: Username"
+        r'(?:Onlyfans|OF)[\s:]+([A-Za-z0-9_.-]+)',
+        # Apenas nome no início seguido de quebra de linha ou emoji
+        r'^([A-Za-z0-9_.-]{3,30})(?:\s*[\n🔥❤️💦]|$)',
+    ]
+
+    def __init__(self, client: TelegramClient, checkpoint: SharedCheckpoint):
+        self.client = client
+        self.checkpoint = checkpoint
+        self.local_cache: dict[str, int] = {}  # Cache local para reduzir queries
+
+    def extract_username(self, caption: str) -> Optional[str]:
+        """
+        Extrai username de uma legenda.
+        Tenta múltiplos padrões até encontrar um match.
+        """
+        if not caption:
+            return None
+
+        caption = caption.strip()
+
+        for pattern in self.USERNAME_PATTERNS:
+            match = re.search(pattern, caption, re.IGNORECASE | re.MULTILINE)
+            if match:
+                username = match.group(1).strip()
+                if len(username) >= 2:
+                    return username.lower()
+
+        return None
+
+    def extract_username_from_messages(self, messages: list) -> Optional[str]:
+        """
+        Extrai username de uma lista de mensagens (álbum).
+        Prioriza a mensagem com legenda mais longa.
+        """
+        best_caption = ""
+        for msg in messages:
+            caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
+            if len(caption) > len(best_caption):
+                best_caption = caption
+
+        return self.extract_username(best_caption)
+
+    async def get_or_create_user_topic(self, username: str, target_chat: int) -> Optional[int]:
+        """
+        Retorna o tópico de destino para um usuário.
+        Cria automaticamente se não existir.
+        Usa SQLite compartilhado para evitar duplicação entre sessões.
+        """
+        if not username:
+            return TARGET_TOPIC
+
+        if not FORUM_SUPPORT:
+            log.warning("Forum Topics não suportado para criação por usuário")
+            return TARGET_TOPIC
+
+        # Cache local
+        if username in self.local_cache:
+            return self.local_cache[username]
+
+        # Verificar no banco compartilhado
+        existing_topic = self.checkpoint.get_user_topic(username)
+        if existing_topic:
+            self.local_cache[username] = existing_topic
+            return existing_topic
+
+        # Tentar reservar para criação (atômico)
+        topic_id, should_create = self.checkpoint.get_or_create_user_topic(username, SESSION_NAME)
+
+        if topic_id:
+            # Já existe
+            self.local_cache[username] = topic_id
+            return topic_id
+
+        if not should_create:
+            # Outra sessão está criando, aguardar
+            for _ in range(10):  # Max 10 tentativas
+                await asyncio.sleep(1)
+                topic_id = self.checkpoint.get_user_topic(username)
+                if topic_id:
+                    self.local_cache[username] = topic_id
+                    return topic_id
+            log.warning(f"Timeout aguardando criação de tópico para '{username}'")
+            return TARGET_TOPIC
+
+        # Criar tópico
+        topic_name = f"📁 {username}"
+
+        try:
+            log.info(f"👤 Criando tópico para usuário: '{username}'")
+
+            result = await self.client(CreateForumTopicRequest(
+                channel=target_chat,
+                title=topic_name,
+                icon_color=0xFFD67E,  # Cor dourada para usuários
+                random_id=random.randrange(-2**62, 2**62)
+            ))
+
+            new_topic_id = None
+            if hasattr(result, 'updates'):
+                for update in result.updates:
+                    if hasattr(update, 'message') and hasattr(update.message, 'id'):
+                        new_topic_id = update.message.id
+                        break
+
+            if new_topic_id:
+                self.checkpoint.set_user_topic(username, new_topic_id)
+                self.local_cache[username] = new_topic_id
+                log.info(f"✓ Tópico criado para '{username}' (ID: {new_topic_id})")
+                return new_topic_id
+            else:
+                log.error(f"Não foi possível obter ID do tópico para '{username}'")
+                return TARGET_TOPIC
+
+        except FloodWaitError as e:
+            log.warning(f"FloodWait ao criar tópico de usuário: {e.seconds}s")
+            await asyncio.sleep(e.seconds + 1)
+            return await self.get_or_create_user_topic(username, target_chat)
+
+        except Exception as e:
+            log.error(f"Erro ao criar tópico para '{username}': {e}")
+            return TARGET_TOPIC
+
+
+# ============================================================
 # STREAMING UPLOADER
 # ============================================================
 
@@ -629,15 +884,56 @@ class StreamingCloner:
     """
     Clonador com streaming real + checkpoint SQLite compartilhado.
     Múltiplas sessões podem trabalhar sem duplicação.
+    Suporta organização por usuário e envio de álbuns.
     """
-    
-    def __init__(self, client: TelegramClient, checkpoint: SharedCheckpoint, 
-                 topic_manager: TopicManager = None):
+
+    def __init__(self, client: TelegramClient, checkpoint: SharedCheckpoint,
+                 topic_manager: TopicManager = None, user_topic_manager: UserTopicManager = None):
         self.client = client
         self.checkpoint = checkpoint
         self.topic_manager = topic_manager
+        self.user_topic_manager = user_topic_manager
         self.last_send_time = 0
-    
+        self.allowed_users = self._load_users_from_json()
+        self.found_users = set()
+
+    def _load_users_from_json(self) -> set[str]:
+        """Carrega lista de usuários do arquivo JSON."""
+        if not FILTER_FROM_JSON:
+            return None
+        try:
+            if os.path.exists(USERS_JSON_FILE):
+                with open(USERS_JSON_FILE, 'r') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        users = set(u.lower() for u in data if u)
+                        log.info(f"📋 Carregados {len(users)} usuários de {USERS_JSON_FILE}")
+                        return users
+        except Exception as e:
+            log.warning(f"⚠ Erro ao carregar {USERS_JSON_FILE}: {e}")
+        return None
+
+    def save_found_users_json(self):
+        """Salva usuários encontrados no scan para arquivo JSON."""
+        if not self.found_users:
+            log.warning("Nenhum usuário encontrado para salvar")
+            return
+        try:
+            users_list = sorted(list(self.found_users))
+            with open(USERS_JSON_FILE, 'w') as f:
+                json.dump(users_list, f, indent=2)
+            log.info(f"💾 Salvos {len(users_list)} usuários em {USERS_JSON_FILE}")
+        except Exception as e:
+            log.error(f"Erro ao salvar {USERS_JSON_FILE}: {e}")
+
+    def is_user_allowed(self, username: str) -> bool:
+        """Verifica se o usuário está na lista permitida."""
+        if not self.allowed_users:
+            return True
+        if not username:
+            return True
+        return username.lower() in self.allowed_users
+
     async def wait_rate_limit(self):
         """Aguarda rate limit."""
         elapsed = time.time() - self.last_send_time
@@ -647,17 +943,48 @@ class StreamingCloner:
     
     async def clone_message(self, msg: Message) -> bool:
         """Clona uma mensagem com streaming e checkpoint compartilhado."""
-        
+
         # Tentar fazer lock da mensagem
         if not self.checkpoint.try_lock_message(SOURCE_CHAT, msg.id, SESSION_NAME):
             log.debug(f"⊘ Msg {msg.id} já em processamento ou concluída")
             return False
-        
+
         await self.wait_rate_limit()
-        
+
         # Determinar tópico de destino
         target_topic = TARGET_TOPIC
-        if AUTO_CREATE_TOPICS and self.topic_manager:
+
+        # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        username = None
+        if ORGANIZE_BY_USER and self.user_topic_manager:
+            caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
+            username = self.user_topic_manager.extract_username(caption)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                return True  # Não baixa nada
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                    return True
+                log.info(f"✅ Filtro: msg {msg.id} do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                return True
+
+            if username:
+                target_topic = await self.user_topic_manager.get_or_create_user_topic(
+                    username, TARGET_CHAT
+                )
+                log.debug(f"👤 Mensagem para usuário: {username}")
+        elif AUTO_CREATE_TOPICS and self.topic_manager:
             source_topic_id = self.topic_manager.get_source_topic_id(msg)
             if source_topic_id:
                 target_topic = await self.topic_manager.get_or_create_target_topic(
@@ -730,7 +1057,153 @@ class StreamingCloner:
             log.error(f"✗ Erro msg {msg.id}: {e}")
             self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
             return False
-    
+
+    async def clone_album(self, messages: list[Message]) -> bool:
+        """
+        Clona um álbum (grupo de mídias com mesmo grouped_id).
+        Envia todas as mídias juntas com uma única legenda.
+        Usa checkpoint compartilhado para coordenação.
+        """
+        if not messages:
+            return False
+
+        if len(messages) == 1:
+            return await self.clone_message(messages[0])
+
+        # Tentar lock de TODAS as mensagens do álbum
+        locked_ids = []
+        for msg in messages:
+            if self.checkpoint.try_lock_message(SOURCE_CHAT, msg.id, SESSION_NAME):
+                locked_ids.append(msg.id)
+            elif not self.checkpoint.is_processed(SOURCE_CHAT, msg.id):
+                # Já está sendo processada por outra sessão
+                # Liberar locks que já fizemos
+                for lid in locked_ids:
+                    self.checkpoint.mark_failed(SOURCE_CHAT, lid)
+                log.debug(f"⊘ Álbum {[m.id for m in messages]} já em processamento")
+                return False
+
+        # Se não conseguiu lock de nenhuma (todas já processadas)
+        if not locked_ids:
+            return False
+
+        await self.wait_rate_limit()
+
+        # Extrair legenda
+        caption = ""
+        for msg in messages:
+            if msg.text:
+                caption = msg.text
+                break
+
+        # Determinar tópico de destino
+        target_topic = TARGET_TOPIC
+
+        username = None
+        if ORGANIZE_BY_USER and self.user_topic_manager:
+            username = self.user_topic_manager.extract_username_from_messages(messages)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                # Marcar como processado sem baixar
+                for msg in messages:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                return True
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    # Marcar como processado sem baixar
+                    for msg in messages:
+                        self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                    return True
+                log.info(f"✅ Filtro: álbum do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                for msg in messages:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                return True
+
+            if username:
+                target_topic = await self.user_topic_manager.get_or_create_user_topic(
+                    username, TARGET_CHAT
+                )
+                log.info(f"👤 Álbum para usuário: {username} → tópico {target_topic}")
+        elif AUTO_CREATE_TOPICS and self.topic_manager:
+            source_topic_id = self.topic_manager.get_source_topic_id(messages[0])
+            if source_topic_id:
+                target_topic = await self.topic_manager.get_or_create_target_topic(
+                    source_topic_id, TARGET_CHAT
+                )
+
+        try:
+            import tempfile
+            tmp_dir = tempfile.gettempdir()
+            files_to_send = []
+            tmp_files = []
+
+            log.info(f"📦 Álbum: {len(messages)} mídias (IDs: {[m.id for m in messages]})")
+
+            for msg in messages:
+                file_name = self._get_file_name(msg)
+                tmp_path = os.path.join(tmp_dir, f"album_{msg.id}_{file_name}")
+                wm_path = os.path.join(tmp_dir, f"wm_album_{msg.id}_{file_name}")
+                tmp_files.append(tmp_path)
+                tmp_files.append(wm_path)
+
+                await self.client.download_media(msg, file=tmp_path)
+
+                upload_path = tmp_path
+                is_video = msg.video is not None
+                is_photo = msg.photo is not None
+
+                if WATERMARK_ENABLED:
+                    if is_video:
+                        if add_watermark_video(tmp_path, wm_path):
+                            upload_path = wm_path
+                    elif is_photo:
+                        if add_watermark_image(tmp_path, wm_path):
+                            upload_path = wm_path
+
+                files_to_send.append(upload_path)
+
+            # Enviar álbum
+            await self.client.send_file(
+                TARGET_CHAT,
+                files_to_send,
+                reply_to=target_topic
+            )
+
+            log.info(f"✓ Álbum: {len(messages)} mídias enviadas")
+
+            # Marcar todas como done
+            for msg in messages:
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+
+            # Limpar arquivos temporários
+            for tmp_file in tmp_files:
+                if os.path.exists(tmp_file):
+                    try:
+                        os.remove(tmp_file)
+                    except:
+                        pass
+
+            return True
+
+        except FloodWaitError as e:
+            log.warning(f"FloodWait no álbum: {e.seconds}s")
+            await asyncio.sleep(e.seconds + 1)
+            return await self.clone_album(messages)
+
+        except Exception as e:
+            log.error(f"✗ Erro no álbum (IDs: {[m.id for m in messages]}): {e}")
+            for msg in messages:
+                self.checkpoint.mark_failed(SOURCE_CHAT, msg.id)
+            return False
+
     async def _clone_small_file(self, msg: Message, target_topic: int = None) -> bool:
         """Clone de arquivo pequeno (cabe em RAM)."""
         import tempfile
@@ -785,7 +1258,6 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
@@ -866,14 +1338,13 @@ class StreamingCloner:
             await self.client.send_file(
                 TARGET_CHAT,
                 upload_path,
-                caption=msg.text or "",
                 reply_to=target_topic,
                 force_document=False,
                 supports_streaming=supports_streaming,
                 thumb=thumb_path if thumb_generated else None,
                 attributes=[video_attrs] if video_attrs else None
             )
-            
+
             upload_time = time.time() - upload_start
             total_time = time.time() - start_time
             
@@ -1062,34 +1533,98 @@ async def main():
     log.info(f"Destino: {TARGET_CHAT} (tópico: {TARGET_TOPIC})")
     log.info(f"Checkpoint DB: {os.path.abspath(SHARED_DB_PATH)}")
     log.info(f"Chunk size: {CHUNK_SIZE // 1024}KB")
+    log.info(f"Organizar por usuário: {'SIM' if ORGANIZE_BY_USER else 'NÃO'}")
+    if SCAN_USERS_ONLY:
+        log.info(f"🔍 MODO SCAN ATIVADO - apenas listando usuários, sem baixar")
+    if FILTER_USER:
+        log.info(f"🎯 FILTRO DE USUÁRIO: apenas '{FILTER_USER}' será processado")
+    if FILTER_FROM_JSON:
+        log.info(f"📋 FILTRO DO JSON: apenas usuários de '{USERS_JSON_FILE}' serão processados")
     log.info("=" * 60)
-    
+
     # Inicializar checkpoint compartilhado
     checkpoint = SharedCheckpoint(SHARED_DB_PATH)
-    
+
     # Limpar locks antigos (sessões mortas)
     checkpoint.cleanup_stale_locks(max_age_minutes=30)
-    
+
     # Estatísticas iniciais
     stats_db = checkpoint.get_stats(SOURCE_CHAT)
     log.info(f"Checkpoint: {stats_db['done']} feitas | {stats_db['processing']} em andamento | {stats_db['failed']} falhas")
-    
-    stats = {'ok': 0, 'fail': 0, 'skip': 0, 'bytes': 0}
+
+    stats = {'ok': 0, 'fail': 0, 'skip': 0, 'bytes': 0, 'albums': 0}
     start_time = time.time()
-    
+
     async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as client:
-        
+
         # Inicializar Topic Manager
         topic_manager = None
-        if AUTO_CREATE_TOPICS and FORUM_SUPPORT:
+        if AUTO_CREATE_TOPICS and FORUM_SUPPORT and not ORGANIZE_BY_USER:
             log.info("Topic Manager: ATIVADO")
             topic_manager = TopicManager(client)
             await topic_manager.load_source_topics(SOURCE_CHAT)
-            
-        cloner = StreamingCloner(client, checkpoint, topic_manager=topic_manager)
-        
+        elif AUTO_CREATE_TOPICS and not FORUM_SUPPORT:
+            log.warning("AUTO_CREATE_TOPICS configurado mas Forum não suportado - ignorando")
+
+        # Inicializar User Topic Manager
+        user_topic_manager = None
+        if ORGANIZE_BY_USER and FORUM_SUPPORT:
+            log.info("👤 User Topic Manager: ATIVADO (SQLite compartilhado)")
+            user_topic_manager = UserTopicManager(client, checkpoint)
+        elif ORGANIZE_BY_USER and not FORUM_SUPPORT:
+            log.warning("ORGANIZE_BY_USER configurado mas Forum não suportado - ignorando")
+
+        cloner = StreamingCloner(
+            client, checkpoint,
+            topic_manager=topic_manager,
+            user_topic_manager=user_topic_manager
+        )
+
         log.info("Conectado! Buscando mensagens...")
-        
+
+        # Agrupar mensagens por grouped_id para detectar álbuns
+        current_album: list[Message] = []
+        current_grouped_id: int | None = None
+
+        async def flush_album():
+            """Processa e envia o álbum atual."""
+            nonlocal current_album, stats
+
+            if not current_album:
+                return
+
+            # Verificar se todas já foram processadas
+            all_processed = all(
+                checkpoint.is_processed(SOURCE_CHAT, m.id) for m in current_album
+            )
+            if all_processed:
+                stats['skip'] += len(current_album)
+                current_album = []
+                return
+
+            if len(current_album) == 1:
+                msg = current_album[0]
+                if checkpoint.is_processed(SOURCE_CHAT, msg.id):
+                    stats['skip'] += 1
+                else:
+                    success = await cloner.clone_message(msg)
+                    if success:
+                        stats['ok'] += 1
+                        stats['bytes'] += cloner._get_file_size(msg) or 0
+                    elif not checkpoint.is_processed(SOURCE_CHAT, msg.id):
+                        stats['fail'] += 1
+            else:
+                success = await cloner.clone_album(current_album)
+                if success:
+                    stats['ok'] += len(current_album)
+                    stats['albums'] += 1
+                    for msg in current_album:
+                        stats['bytes'] += cloner._get_file_size(msg) or 0
+                elif not all(checkpoint.is_processed(SOURCE_CHAT, m.id) for m in current_album):
+                    stats['fail'] += len(current_album)
+
+            current_album = []
+
         async for msg in client.iter_messages(
             SOURCE_CHAT,
             min_id=0,  # Começar do início, checkpoint vai filtrar
@@ -1103,39 +1638,62 @@ async def main():
                             continue
                     else:
                         continue
-            
-            # Verificar se já foi processada
-            if checkpoint.is_processed(SOURCE_CHAT, msg.id):
-                stats['skip'] += 1
-                continue
-            
-            success = await cloner.clone_message(msg)
-            
-            if success:
-                stats['ok'] += 1
-                stats['bytes'] += cloner._get_file_size(msg) or 0
-            elif success is False and not checkpoint.is_processed(SOURCE_CHAT, msg.id):
-                # Falha real (não skip por lock)
-                stats['fail'] += 1
-            
-            # Log a cada 10
+
+            # Verificar se é parte de um álbum
+            grouped_id = getattr(msg, 'grouped_id', None)
+
+            if grouped_id is None:
+                # Mensagem individual - processar álbum anterior primeiro
+                await flush_album()
+                current_album = [msg]
+                current_grouped_id = None
+                await flush_album()
+
+            elif grouped_id == current_grouped_id:
+                # Mesmo álbum - adicionar à lista
+                current_album.append(msg)
+
+            else:
+                # Novo álbum - processar anterior e iniciar novo
+                await flush_album()
+                current_album = [msg]
+                current_grouped_id = grouped_id
+
+            # Log de progresso (mais espaçado no modo scan)
             total = stats['ok'] + stats['fail']
-            if total > 0 and total % 10 == 0:
-                elapsed = (time.time() - start_time) / 60
-                rate = total / elapsed if elapsed > 0 else 0
-                gb = stats['bytes'] / (1024**3)
-                log.info(
-                    f"Progresso: {stats['ok']} ok | {stats['skip']} skip | "
-                    f"{rate:.1f} msg/min | {gb:.2f} GB"
-                )
-    
+            log_interval = 500 if SCAN_USERS_ONLY else 10
+            if total > 0 and total % log_interval == 0:
+                if SCAN_USERS_ONLY:
+                    unique_users = len(cloner.found_users)
+                    log.info(f"🔍 Scan: {total} msgs processadas | {unique_users} usuários únicos")
+                else:
+                    elapsed = (time.time() - start_time) / 60
+                    rate = total / elapsed if elapsed > 0 else 0
+                    gb = stats['bytes'] / (1024**3)
+                    log.info(
+                        f"Progresso: {stats['ok']} ok | {stats['albums']} álbuns | {stats['skip']} skip | "
+                        f"{rate:.1f} msg/min | {gb:.2f} GB"
+                    )
+
+        # Processar último álbum pendente
+        await flush_album()
+
+        # Salvar JSON se estiver em modo scan
+        if SCAN_USERS_ONLY:
+            cloner.save_found_users_json()
+
     elapsed = (time.time() - start_time) / 60
     log.info("=" * 60)
     log.info("CONCLUÍDO!")
-    log.info(f"Sucesso: {stats['ok']}")
-    log.info(f"Puladas (já feitas): {stats['skip']}")
-    log.info(f"Falhas: {stats['fail']}")
-    log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
+    if SCAN_USERS_ONLY:
+        log.info(f"Usuários únicos encontrados: {len(cloner.found_users)}")
+        log.info(f"Salvos em: {USERS_JSON_FILE}")
+    else:
+        log.info(f"Sucesso: {stats['ok']} mensagens")
+        log.info(f"Álbuns: {stats['albums']}")
+        log.info(f"Puladas (já feitas): {stats['skip']}")
+        log.info(f"Falhas: {stats['fail']}")
+        log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
     log.info(f"Tempo: {elapsed:.1f} minutos")
     log.info("=" * 60)
 
