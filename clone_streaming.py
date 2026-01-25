@@ -21,7 +21,7 @@ from typing import AsyncGenerator, BinaryIO, Optional
 
 # Carregar variáveis de ambiente do arquivo .env
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(Path(__file__).parent / '.env')
 
 from telethon import TelegramClient
 from telethon.tl.types import (
@@ -32,14 +32,10 @@ from telethon.tl.functions.upload import SaveBigFilePartRequest
 from telethon.tl.functions.messages import SendMediaRequest
 from telethon.errors import FloodWaitError
 
-# Forum Topics - importar apenas se disponível
-try:
-    from telethon.tl.types import ForumTopic
-    from telethon.tl.functions.channels import CreateForumTopicRequest, GetForumTopicsRequest
-    FORUM_SUPPORT = True
-except ImportError:
-    FORUM_SUPPORT = False
-    logging.warning("Forum Topics não suportado nesta versão do Telethon")
+# Forum Topics
+from telethon.tl.types import ForumTopic, MessageService
+from telethon.tl.functions.messages import CreateForumTopicRequest, GetForumTopicsRequest
+FORUM_SUPPORT = True
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -69,6 +65,19 @@ TOPIC_MAP_FILE = 'topic_map.json'
 # User-to-topic mapping (para organizar mídias por usuário)
 USER_TOPIC_MAP_FILE = 'user_topic_map.json'
 ORGANIZE_BY_USER = os.environ.get('ORGANIZE_BY_USER', 'false').lower() == 'true'
+
+# Filtrar apenas um usuário específico (ex: "usuario123")
+# Se definido, apenas álbuns deste usuário serão processados
+FILTER_USER = os.environ.get('FILTER_USER', '').strip().lower()
+
+# Modo scan: apenas lista usuários encontrados sem baixar nada
+SCAN_USERS_ONLY = os.environ.get('SCAN_USERS_ONLY', 'false').lower() == 'true'
+
+# Arquivo JSON para salvar/carregar lista de usuários encontrados no scan
+USERS_JSON_FILE = 'users_found.json'
+
+# Filtrar usuários do arquivo JSON (um por linha ou lista JSON)
+FILTER_FROM_JSON = os.environ.get('FILTER_FROM_JSON', 'false').lower() == 'true'
 
 # Streaming config
 CHUNK_SIZE = 512 * 1024  # 512KB por chunk (máximo MTProto)
@@ -336,7 +345,7 @@ class TopicManager:
         
         try:
             result = await self.client(GetForumTopicsRequest(
-                channel=source_chat,
+                peer=source_chat,
                 offset_date=0,
                 offset_id=0,
                 offset_topic=0,
@@ -386,7 +395,7 @@ class TopicManager:
             log.info(f"📝 Criando tópico no destino: '{topic_name}'")
             
             result = await self.client(CreateForumTopicRequest(
-                channel=target_chat,
+                peer=target_chat,
                 title=topic_name,
                 icon_color=0x6FB9F0,  # Cor azul padrão
                 random_id=random.randrange(-2**62, 2**62)
@@ -522,7 +531,7 @@ class UserTopicManager:
             log.info(f"👤 Criando tópico para usuário: '{username}'")
 
             result = await self.client(CreateForumTopicRequest(
-                channel=target_chat,
+                peer=target_chat,
                 title=topic_name,
                 icon_color=0xFFD67E,  # Cor dourada para usuários
                 random_id=random.randrange(-2**62, 2**62)
@@ -648,7 +657,49 @@ class StreamingCloner:
         self.topic_manager = topic_manager
         self.user_topic_manager = user_topic_manager
         self.last_send_time = 0
-    
+        self.allowed_users = self._load_users_from_json()  # Usuários permitidos do JSON
+        self.found_users = set()  # Usuários encontrados no scan
+
+    def _load_users_from_json(self) -> set[str]:
+        """Carrega lista de usuários do arquivo JSON."""
+        if not FILTER_FROM_JSON:
+            return None
+
+        try:
+            if os.path.exists(USERS_JSON_FILE):
+                with open(USERS_JSON_FILE, 'r') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        users = set(u.lower() for u in data if u)
+                        log.info(f"📋 Carregados {len(users)} usuários de {USERS_JSON_FILE}")
+                        return users
+        except Exception as e:
+            log.warning(f"⚠ Erro ao carregar {USERS_JSON_FILE}: {e}")
+
+        return None
+
+    def save_found_users_json(self):
+        """Salva usuários encontrados no scan para arquivo JSON."""
+        if not self.found_users:
+            log.warning("Nenhum usuário encontrado para salvar")
+            return
+
+        try:
+            users_list = sorted(list(self.found_users))
+            with open(USERS_JSON_FILE, 'w') as f:
+                json.dump(users_list, f, indent=2)
+            log.info(f"💾 Salvos {len(users_list)} usuários em {USERS_JSON_FILE}")
+        except Exception as e:
+            log.error(f"Erro ao salvar {USERS_JSON_FILE}: {e}")
+
+    def is_user_allowed(self, username: str) -> bool:
+        """Verifica se o usuário está na lista permitida."""
+        if not self.allowed_users:
+            return True  # Sem filtro = todos permitidos
+        if not username:
+            return True  # Sem username = processar normalmente
+        return username.lower() in self.allowed_users
+
     async def wait_rate_limit(self):
         """Aguarda rate limit de 20 msgs/min."""
         elapsed = time.time() - self.last_send_time
@@ -665,9 +716,27 @@ class StreamingCloner:
         target_topic = TARGET_TOPIC
 
         # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        username = None
         if ORGANIZE_BY_USER and self.user_topic_manager:
             caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
             username = self.user_topic_manager.extract_username(caption)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                return True  # Não baixa nada
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    return True  # Marcar como processado sem baixar
+                log.info(f"✅ Filtro: msg {msg.id} do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                return True  # Marcar como processado sem baixar
+
             if username:
                 target_topic = await self.user_topic_manager.get_or_create_user_topic(
                     username, TARGET_CHAT
@@ -743,7 +812,6 @@ class StreamingCloner:
             return False
 
         if len(messages) == 1:
-            # Apenas uma mensagem, usar clone normal
             return await self.clone_message(messages[0])
 
         await self.wait_rate_limit()
@@ -758,16 +826,32 @@ class StreamingCloner:
         # Determinar tópico de destino
         target_topic = TARGET_TOPIC
 
-        # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        username = None
         if ORGANIZE_BY_USER and self.user_topic_manager:
             username = self.user_topic_manager.extract_username_from_messages(messages)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                return True  # Não baixa nada
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    return True  # Marcar como processado sem baixar
+                log.info(f"✅ Filtro: álbum do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                return True  # Marcar como processado sem baixar
+
             if username:
                 target_topic = await self.user_topic_manager.get_or_create_user_topic(
                     username, TARGET_CHAT
                 )
                 log.info(f"👤 Álbum para usuário: {username} → tópico {target_topic}")
         elif AUTO_CREATE_TOPICS and self.topic_manager:
-            # Fallback para topic_manager se não usar organização por usuário
             source_topic_id = self.topic_manager.get_source_topic_id(messages[0])
             if source_topic_id:
                 target_topic = await self.topic_manager.get_or_create_target_topic(
@@ -775,7 +859,6 @@ class StreamingCloner:
                 )
 
         try:
-            # Download de todas as mídias
             import tempfile
             tmp_dir = tempfile.gettempdir()
             files_to_send = []
@@ -850,7 +933,12 @@ class StreamingCloner:
         wm_path = os.path.join(tmp_dir, f"wm_{file_name}")
 
         try:
+            start_dl = time.time()
+            # Download padrão (Telethon gerencia rate limiting internamente)
             await self.client.download_media(msg, file=tmp_path)
+            dl_time = time.time() - start_dl
+            dl_speed = file_size / dl_time / (1024 * 1024) if dl_time > 0 else 0
+            log.info(f"  ↓ Download: {dl_time:.1f}s ({dl_speed:.1f} MB/s)")
 
             # Detectar tipo de mídia
             is_video = msg.video is not None
@@ -1237,6 +1325,12 @@ async def main():
     log.info(f"Chunk size: {CHUNK_SIZE // 1024}KB")
     log.info(f"Parallel uploads: {PARALLEL_UPLOADS}")
     log.info(f"Organizar por usuário: {'SIM' if ORGANIZE_BY_USER else 'NÃO'}")
+    if SCAN_USERS_ONLY:
+        log.info(f"🔍 MODO SCAN ATIVADO - apenas listando usuários, sem baixar")
+    if FILTER_USER:
+        log.info(f"🎯 FILTRO DE USUÁRIO: apenas '{FILTER_USER}' será processado")
+    if FILTER_FROM_JSON:
+        log.info(f"📋 FILTRO DO JSON: apenas usuários de '{USERS_JSON_FILE}' serão processados")
     log.info("=" * 60)
 
     last_id = load_checkpoint()
@@ -1285,7 +1379,6 @@ async def main():
                 return
 
             if len(current_album) == 1:
-                # Mensagem individual
                 msg = current_album[0]
                 success = await cloner.clone_message(msg)
                 if success:
@@ -1295,17 +1388,15 @@ async def main():
                     stats['fail'] += 1
                 save_checkpoint(msg.id)
             else:
-                # Álbum de mídias
                 success = await cloner.clone_album(current_album)
                 if success:
                     stats['ok'] += len(current_album)
                     stats['albums'] += 1
                     for msg in current_album:
                         stats['bytes'] += cloner._get_file_size(msg) or 0
+                        save_checkpoint(msg.id)
                 else:
                     stats['fail'] += len(current_album)
-                # Salvar checkpoint do último ID do álbum
-                save_checkpoint(current_album[-1].id)
 
             current_album = []
 
@@ -1334,7 +1425,7 @@ async def main():
                 await flush_album()
 
             elif grouped_id == current_grouped_id:
-                # Mesma album - adicionar à lista
+                # Mesmo álbum - adicionar à lista
                 current_album.append(msg)
 
             else:
@@ -1343,27 +1434,41 @@ async def main():
                 current_album = [msg]
                 current_grouped_id = grouped_id
 
-            # Log a cada 10 mensagens processadas
+            # Log de progresso (mais espaçado no modo scan)
             total = stats['ok'] + stats['fail']
-            if total > 0 and total % 10 == 0:
-                elapsed = (time.time() - start_time) / 60
-                rate = total / elapsed if elapsed > 0 else 0
-                gb = stats['bytes'] / (1024**3)
-                log.info(
-                    f"Progresso: {stats['ok']} ok | {stats['albums']} álbuns | "
-                    f"{rate:.1f} msg/min | {gb:.2f} GB"
-                )
+            log_interval = 500 if SCAN_USERS_ONLY else 10
+            if total > 0 and total % log_interval == 0:
+                if SCAN_USERS_ONLY:
+                    # No scan, mostrar usuários únicos encontrados
+                    unique_users = len(cloner.found_users)
+                    log.info(f"🔍 Scan: {total} msgs processadas | {unique_users} usuários únicos")
+                else:
+                    elapsed = (time.time() - start_time) / 60
+                    rate = total / elapsed if elapsed > 0 else 0
+                    gb = stats['bytes'] / (1024**3)
+                    log.info(
+                        f"Progresso: {stats['ok']} ok | {stats.get('albums', 0)} álbuns | "
+                        f"{rate:.1f} msg/min | {gb:.2f} GB"
+                    )
 
         # Processar último álbum pendente
         await flush_album()
 
+        # Salvar JSON se estiver em modo scan
+        if SCAN_USERS_ONLY:
+            cloner.save_found_users_json()
+
     elapsed = (time.time() - start_time) / 60
     log.info("=" * 60)
     log.info("CONCLUÍDO!")
-    log.info(f"Sucesso: {stats['ok']} mensagens")
-    log.info(f"Álbuns: {stats['albums']}")
-    log.info(f"Falhas: {stats['fail']}")
-    log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
+    if SCAN_USERS_ONLY:
+        log.info(f"Usuários únicos encontrados: {len(cloner.found_users)}")
+        log.info(f"Salvos em: {USERS_JSON_FILE}")
+    else:
+        log.info(f"Sucesso: {stats['ok']} mensagens")
+        log.info(f"Álbuns: {stats['albums']}")
+        log.info(f"Falhas: {stats['fail']}")
+        log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
     log.info(f"Tempo: {elapsed:.1f} minutos")
     log.info("=" * 60)
 

@@ -1,0 +1,909 @@
+================================================================================
+RELATÓRIO DE SCAN - MÍDIAS POR USUÁRIO
+================================================================================
+Data: 2026-01-22 18:51:30
+Origem: -1002914436230
+
+Total de mensagens processadas: 12382
+Total de mídias encontradas: 12380
+Total de álbuns: 1568
+Usuários únicos identificados: 440
+Mídias sem username identificado: 539
+
+🔀 Estatísticas de Agrupamento:
+   Usernames agrupados em usuários existentes: 1026
+   Total de variações processadas: 440
+
+================================================================================
+TODOS OS 440 USUÁRIOS POR QUANTIDADE DE MÍDIAS
+================================================================================
+
+#    Usuário                          Mídia   Vídeo   Foto   Doc  Álbuns      Tamanho
+--------------------------------------------------------------------------------
+1    onlyfans                          1825     963    862     0     233      9.62 GB
+2    privacy                            656     359    297     0      82      3.25 GB
+3    alohadrico                         159     137     22     0      16      1.72 GB
+4    caramujo                           153     115     38     0      16      5.52 GB
+5    agrohot                            151      72     79     0      16      2.21 GB
+6    085nunes                           147     147      0     0      16      5.60 GB
+7    alexwm10                           143      85     58     0      15     961.8 MB
+8    eaejai                             139     130      9     0      14      1.04 GB
+9    luizmiguel_07                      137      67     70     0      14     373.9 MB
+10   vilengo                            130      55     75     0      14      2.04 GB
+11   kitoshelby00                       125      76     49     0      13      1.52 GB
+12   kauezinhoo                         118      95     23     0      12      2.05 GB
+13   yuribonotto                        103      47     56     0      13     734.0 MB
+14   aingeru                            101      92      9     0      15      2.36 GB
+15   ygorbahia_                         100      42     58     0      11     426.4 MB
+16   garotaofitnes                       99      72     27     0      10      2.94 GB
+17   matheussoaresy                      98      68     30     0      10      1.18 GB
+18   henrique.nassif                     97      66     31     0      11     484.8 MB
+19   luizmathiaas                        95      71     24     0      10      1.06 GB
+20   uendercomu                          93      34     59     0      10     410.4 MB
+21   marcosandre                         90      64     26     0       9    1008.1 MB
+22   gemeosrocha                         90      35     55     0       9     255.4 MB
+23   pedrolucaspl01                      89      89      0     0       9     509.9 MB
+24   ksl                                 87      47     40     0       9     614.2 MB
+25   jludwig                             85      75     10     0       9     377.8 MB
+26   lipeuchispriv                       80      45     35     0       8     188.1 MB
+27   dichocolatte                        79      79      0     0       8      1.20 GB
+28   thocostaoficial                     79      17     62     0       9     130.1 MB
+29   piquezika                           77      64     13     0       8      1.57 GB
+30   facundoantunes                      77      63     14     0       8     539.4 MB
+31   fitnarad                            74      35     39     0       8      2.42 GB
+32   afelipeb                            71      31     40     0       8     546.9 MB
+33   brandtsboys                         70      60     10     0      10      1.05 GB
+34   caiopernalonga                      70      60     10     0       8      2.86 GB
+35   paccoo                              69      30     39     0       7     922.6 MB
+36   ofc_guivieira                       69      42     27     0       7     436.4 MB
+37   breno.martins                       68      68      0     0       7      2.23 GB
+38   miguelguerreroa                     64      10     54     0       9      15.3 MB
+39   andediass                           60      40     20     0       6     100.8 MB
+40   vitinhoprado                        60      16     44     0       6     372.9 MB
+41   deividfortunato                     59      49     10     0       6     865.6 MB
+42   mendesdotado                        58      49      9     0       7     199.8 MB
+43   jrluc                               57      47     10     0       6      2.55 GB
+44   luiz_reis                           56      37     19     0       6     383.3 MB
+45   alexs2felippe                       56      16     40     0       6     901.3 MB
+46   samdot21                            54      45      9     0       7     255.9 MB
+47   egoistadotcom                       53      53      0     0       6      1.22 GB
+48   aluisio                             52      35     17     0       6     222.2 MB
+49   mxtbear                             50      46      4     0       5      1.20 GB
+50   xgiox69                             50      44      6     0       5     722.4 MB
+51   albertsaintz                        50      38     12     0       5     326.3 MB
+52   karlosferr24cm                      50      30     20     0       7     906.2 MB
+53   dyamondjohn03                       50      13     37     0       5     316.1 MB
+54   ocaadu                              50      50      0     0       5     617.2 MB
+55   malokadot21                         49      18     31     0       5     124.0 MB
+56   guimarqezz                          49      41      8     0       5     138.2 MB
+57   vulgo_ruan                          49      42      7     0       6     866.5 MB
+58   kauaotto                            49      38     11     0       5     596.0 MB
+59   serafingabs                         48      41      7     0       5     240.4 MB
+60   jottaeme                            47      34     13     0       5     425.5 MB
+61   igornovabr                          46       5     41     0       6      72.4 MB
+62   zaydom                              46      36     10     0       5     189.3 MB
+63   spartacosz                          46      40      6     0       5      1.78 GB
+64   teamchleep                          42      30     12     0       5     478.5 MB
+65   felippemasson                       42      36      6     0       6     337.6 MB
+66   igorgomms                           40      30     10     0       4     310.7 MB
+67   surtadinrs                          40      35      5     0       4     279.4 MB
+68   evertonteal                         40      40      0     0       4     437.8 MB
+69   otaldobonis                         40       0     40     0       4       2.1 MB
+70   thiagolps_                          40      35      5     0       4     574.1 MB
+71   rafamarttinz                        40      20     20     0       4     300.2 MB
+72   novinho_26ctm                       39      39      0     0       4      1.24 GB
+73   pauloricardao                       39      36      3     0       4     411.2 MB
+74   toofriendlytom                      39      39      0     0       4      1.43 GB
+75   mettew22                            39      29     10     0       4     175.4 MB
+76   kyliancria                          39       8     31     0       4     328.1 MB
+77   davboyy                             38      10     28     0       4      28.5 MB
+78   pedroplx                            38      32      6     0       4     233.4 MB
+79   josiah_hoffman                      38      38      0     0       4     724.9 MB
+80   samvass                             38      37      1     0       4      1.10 GB
+81   tradesmandick                       38      34      4     0       4     167.1 MB
+82   vitornegao2003                      37      29      8     0       4     503.7 MB
+83   riverosale                          34      19     15     0       4      36.1 MB
+84   jairofernandes_                     33      33      0     0       4     649.4 MB
+85   eubiel                              33      12     21     0       5     143.8 MB
+86   nizam                               32      11     21     0       4      66.5 MB
+87   pedreirofibrado                     31       5     26     0       4      69.4 MB
+88   henriquelimatv                      30      11     19     0       4     148.7 MB
+89   matheus_amorim                      30      26      4     0       3     401.5 MB
+90   militares                           30      30      0     0       3     536.2 MB
+91   e.herlan                            30      26      4     0       3     359.3 MB
+92   erdglez                             30       6     24     0       3      38.8 MB
+93   adamsanerof                         30      16     14     0       4     108.1 MB
+94   mattew22cm                          30      22      8     0       3     364.7 MB
+95   jaffferreira                        30      26      4     0       3     125.4 MB
+96   remasm                              30      30      0     0       3     973.2 MB
+97   ericnvee                            30      28      2     0       3     168.4 MB
+98   arcosatyand                         30      30      0     0       3     292.4 MB
+99   viniciusteixiera                    30      15     15     0       3     119.8 MB
+100  bentocaminhoneiro23                 30      11     19     0       3     266.3 MB
+101  alesiewert                          30       7     23     0       3     478.1 MB
+102  brunobb_beliel                      30      30      0     0       3     930.2 MB
+103  delpenho                            29      14     15     0       3      54.4 MB
+104  gabrielcandido                      29      29      0     0       3     130.4 MB
+105  bhizzi                              29      26      3     0       3      77.9 MB
+106  kauancandeia                        29      23      6     0       3     142.3 MB
+107  pa                                  29      26      3     0       3     503.2 MB
+108  daniipovoas                         28      28      0     0       4     933.4 MB
+109  ederxxl                             28      11     17     0       3     156.7 MB
+110  lucasthomaz                         28       6     22     0       3      72.7 MB
+111  makiinhoo                           25      19      6     0       3     158.5 MB
+112  danielzambrano                      25      25      0     0       3     841.5 MB
+113  mr_eddie_d                          25      25      0     0       3     810.6 MB
+114  luccanov69                          25      21      4     0       3     263.8 MB
+115  sojmani                             24      19      5     0       4     617.8 MB
+116  rossdalton                          24      24      0     0       3     281.6 MB
+117  jmloz                               24      24      0     0       3      1.32 GB
+118  uweliton                            24      18      6     0       4     248.0 MB
+119  liascandido                         23      17      6     0       3      24.3 MB
+120  frandullon86                        23      22      1     0       3      1.23 GB
+121  deek_aesthetic                      23       2     21     0       3       6.7 MB
+122  rick_sanss                          22      17      5     0       3      65.3 MB
+123  iagoalvesxx                         21      11     10     0       3      75.7 MB
+124  fabien                              21      20      1     0       3     488.6 MB
+125  brannoleno                          20       0     20     0       2       1.4 MB
+126  guapoyuko                           20      10     10     0       2      90.8 MB
+127  kevin_boyx                          20      18      2     0       2     176.5 MB
+128  polofromthe305                      20      13      7     0       2      59.6 MB
+129  maromb                              20      14      6     0       2      83.7 MB
+130  isaaqqdias                          20      14      6     0       2      90.8 MB
+131  mannyhp13                           20      15      5     0       2     149.3 MB
+132  machdovr                            20       6     14     0       2      29.0 MB
+133  oficialcleisonn                     20      20      0     0       2      85.0 MB
+134  nate_2k                             20      11      9     0       2     193.2 MB
+135  jeroboam30                          20       7     13     0       2     272.7 MB
+136  xsaiyanoz                           20       7     13     0       2     422.4 MB
+137  kingnizzi                           20      15      5     0       2     229.2 MB
+138  goulart                             20      20      0     0       2      46.4 MB
+139  jeanmendes                          20       8     12     0       2      12.8 MB
+140  israel2074                          20      17      3     0       2     107.8 MB
+141  matheusreis                         20      11      9     0       2      52.1 MB
+142  mvin1cius                           20       9     11     0       2      33.6 MB
+143  ikarus                              20       0     20     0       2       1.7 MB
+144  chulipaoficial                      20       4     16     0       2      62.9 MB
+145  eucaiquef                           20      20      0     0       2     325.0 MB
+146  fit_liam                            19      19      0     0       2     434.2 MB
+147  falatuweslley                       19       7     12     0       2      23.4 MB
+148  gbcria                              19      10      9     0       2      42.3 MB
+149  jakipz                              19       3     16     0       2     153.3 MB
+150  oficialtalox                        19      19      0     0       2     154.2 MB
+151  teal_ev                             19      13      6     0       2      50.5 MB
+152  feliipecarioca                      19       8     11     0       2      93.4 MB
+153  mlk_hulg                            18      18      0     0       2     168.2 MB
+154  danielgr444                         18      18      0     0       2     254.8 MB
+155  facundo                             18       8     10     0       3     183.2 MB
+156  ayllann4                            18      16      2     0       2      41.3 MB
+157  ybseeja                             18      18      0     0       2     161.6 MB
+158  crylucas                            18      18      0     0       2     663.2 MB
+159  clzada                              18       2     16     0       2      52.8 MB
+160  hesdantass                          17       5     12     0       2      10.2 MB
+161  marcusdotado                        17      17      0     0       2     272.3 MB
+162  felixamericano                      17       6     11     0       2      29.7 MB
+163  euyuridiaz                          17      17      0     0       2     194.4 MB
+164  eduardovivas                        17       9      8     0       2      14.5 MB
+165  playfezao                           17       1     16     0       2       9.9 MB
+166  superdotarg                         16       7      9     0       2      24.5 MB
+167  weslleyxs                           16      16      0     0       2      38.6 MB
+168  liamarnoldsxx                       16      16      0     0       2      60.5 MB
+169  tyleriacona                         15      12      3     0       3     140.5 MB
+170  dustinmceer1                        15       7      8     0       2     390.0 MB
+171  timlaurenz                          15      15      0     0       2     115.1 MB
+172  wrvthful                            15      15      0     0       2     338.4 MB
+173  samuka_sts                          15       8      7     0       2     169.1 MB
+174  euduardo                            14       5      9     0       2     316.6 MB
+175  itsjustparker                       14      11      3     0       2     468.8 MB
+176  chileantwink18                      14      14      0     0       2     655.8 MB
+177  mjgomes021                          14       5      9     0       3      65.7 MB
+178  julianchase                         13       3     10     0       2      24.0 MB
+179  bremenfitness                       13      13      0     0       2     268.1 MB
+180  mrmoreno8                           13      13      0     0       2     223.2 MB
+181  leonardosafra                       13       7      6     0       2      16.3 MB
+182  dudu                                12      12      0     0       3      36.2 MB
+183  oproblemao                          12       6      6     0       2       8.2 MB
+184  kev                                 12       4      8     0       2       6.2 MB
+185  khalljon                            12      11      1     0       3     334.5 MB
+186  kaiorod                             11       2      9     0       2      18.4 MB
+187  alexsalgueiro                       11      10      1     0       2      56.7 MB
+188  tarzan_topxxxl                      11      11      0     0       2     251.7 MB
+189  cellos                              10       2      8     0       1      28.0 MB
+190  novin_scdot                         10       7      3     0       1      93.1 MB
+191  romildosantos                       10       6      4     0       1      71.7 MB
+192  bandito21                           10      10      0     0       1     193.1 MB
+193  fjfgkrndcvknf                       10      10      0     0       1     119.1 MB
+194  brownboynz                          10      10      0     0       1      58.4 MB
+195  pvitorbs                            10       8      2     0       1     339.4 MB
+196  jdmontota11                         10      10      0     0       1      13.2 MB
+197  mcpedrin                            10       8      2     0       2      11.7 MB
+198  petrotolentino                      10      10      0     0       1     434.0 MB
+199  plinio271                           10      10      0     0       2     339.5 MB
+200  davidmatheushc                      10       4      6     0       1      69.6 MB
+201  emilivno                            10      10      0     0       1     640.0 MB
+202  fnunes                              10      10      0     0       1     203.1 MB
+203  elboydeutuiter                      10      10      0     0       1     319.4 MB
+204  max_barz                            10      10      0     0       2      91.0 MB
+205  theoeneffectvip                     10      10      0     0       1      61.4 MB
+206  furie235                            10       8      2     0       1     158.4 MB
+207  mons                                10       3      7     0       1       8.4 MB
+208  valerio_orozco                      10      10      0     0       1      24.0 MB
+209  alexriverasoy                       10       0     10     0       1       1.0 MB
+210  viniaraujo                          10       5      5     0       1      14.8 MB
+211  argentzannter                       10       0     10     0       1       0.7 MB
+212  jay_55k                             10       5      5     0       1      10.5 MB
+213  officialkako                        10       2      8     0       1       9.1 MB
+214  samuel.brenes17                     10       2      8     0       1       6.1 MB
+215  tomlopezzz                          10       4      6     0       1      33.4 MB
+216  miguelcastro                        10      10      0     0       1      25.8 MB
+217  alexmendes                          10       6      4     0       1      26.7 MB
+218  triton                              10       3      7     0       1      13.9 MB
+219  motoboyjunior                       10       4      6     0       1      45.6 MB
+220  sunshinesmile99                     10      10      0     0       1      78.7 MB
+221  luciferrnsfw                        10      10      0     0       1      98.5 MB
+222  eibrunitoo                          10       2      8     0       1       9.7 MB
+223  jottaeme_ofc                        10      10      0     0       1     259.0 MB
+224  vsilveira                           10      10      0     0       1     144.6 MB
+225  paulobrawss                         10       3      7     0       1       4.3 MB
+226  swcollegeboys                        9       7      2     0       2      76.4 MB
+227  juniiorc25                           9       0      9     0       1       0.6 MB
+228  niccoloneri                          9       9      0     0       1     487.7 MB
+229  mlk_discretu                         9       7      2     0       2      55.5 MB
+230  tolentinoprive                       9       6      3     0       1      83.1 MB
+231  castrofire                           9       4      5     0       1      78.7 MB
+232  scandicpleasure                      9       9      0     0       1     113.6 MB
+233  vitincavalieri                       9       9      0     0       1      87.6 MB
+234  ofcmatheus                           9       7      2     0       1      34.9 MB
+235  mew                                  9       3      6     0       1      84.1 MB
+236  potrocarrillo                        9       2      7     0       1       3.8 MB
+237  moreledgar95                         9       8      1     0       1     103.6 MB
+238  heysoyluaa                           9       3      6     0       1       9.6 MB
+239  adonishayesxxx                       9       2      7     0       1       2.7 MB
+240  woodyzin                             9       5      4     0       1      21.5 MB
+241  davidalemao                          9       4      5     0       1       4.7 MB
+242  maicky                               9       6      3     0       1      38.6 MB
+243  coentrin                             9       5      4     0       1      70.7 MB
+244  henrikecouto                         9       7      2     0       1     129.3 MB
+245  guisousaa_1                          8       0      8     0       1       0.5 MB
+246  lucasrochaa                          8       0      8     0       1       0.6 MB
+247  danielmontoya                        8       6      2     0       2      57.1 MB
+248  endrick_philippe                     8       6      2     0       2      18.6 MB
+249  euchinax                             8       3      5     0       1       4.4 MB
+250  saucymosess                          8       4      4     0       1     127.2 MB
+251  mrmuscle                             8       7      1     0       1     941.9 MB
+252  maxpriceofficial                     8       8      0     0       1      62.7 MB
+253  davidhotpics                         8       3      5     0       1      42.8 MB
+254  alejandrobelmont                     8       8      0     0       1     217.1 MB
+255  bigfit_                              8       6      2     0       1     235.0 MB
+256  juniorolioti                         8       5      3     0       2     159.4 MB
+257  felipe_wolf                          8       8      0     0       1      63.7 MB
+258  dwaynemckellbaby                     8       8      0     0       1     226.5 MB
+259  caioalvarenga                        8       6      2     0       2      52.8 MB
+260  lukertwink                           8       8      0     0       1     494.9 MB
+261  girthmasterr_solo                    8       7      1     0       1      51.8 MB
+262  jupetirrr                            8       2      6     0       1       9.6 MB
+263  gabriel_ortegas                      8       6      2     0       2      20.8 MB
+264  joeymillsxxx                         8       8      0     0       2     228.8 MB
+265  tywanks                              8       8      0     0       2      61.8 MB
+266  pablofelipefm                        8       8      0     0       1     241.6 MB
+267  renxnpaz                             8       5      3     0       1       8.4 MB
+268  mamadorcarioca                       8       8      0     0       1      50.2 MB
+269  tattoputo                            8       2      6     0       2      86.9 MB
+270  paulo_victormelo                     7       6      1     0       2      45.0 MB
+271  eulluquinhas                         7       0      7     0       1       0.4 MB
+272  jaligone                             7       1      6     0       1     107.9 MB
+273  bonjouraxel                          7       4      3     0       1      34.5 MB
+274  cartainst                            7       7      0     0       1     534.5 MB
+275  nickmasc                             7       2      5     0       1      35.7 MB
+276  eutmxxx                              7       5      2     0       3      13.9 MB
+277  maximiliabarmin                      7       7      0     0       1     107.4 MB
+278  zamxof                               7       2      5     0       1      33.7 MB
+279  juniorrodrigues                      7       1      6     0       1      47.2 MB
+280  aust1nday                            7       7      0     0       1      73.6 MB
+281  bilatinmen                           7       7      0     0       2      65.3 MB
+282  cesarbabyy                           7       1      6     0       1       1.5 MB
+283  igorpaes                             7       1      6     0       1       4.5 MB
+284  taddydaddy                           7       4      3     0       1       8.2 MB
+285  gutogato                             7       1      6     0       2       8.9 MB
+286  brmartins                            7       3      4     0       1       3.8 MB
+287  dynhoalves                           7       5      2     0       1      53.0 MB
+288  andersonparkee                       6       0      6     0       1       0.4 MB
+289  cerqueiralz                          6       0      6     0       1       0.3 MB
+290  dalton69xxx                          6       0      6     0       1       0.4 MB
+291  matheusfc                            6       6      0     0       1     274.8 MB
+292  milder_dz                            6       3      3     0       2      78.3 MB
+293  javivelaroxxx                        6       6      0     0       1      39.3 MB
+294  ograndesimoes                        6       4      2     0       2      58.9 MB
+295  igormiller                           6       6      0     0       1      15.9 MB
+296  farmer_b28                           6       6      0     0       1      93.0 MB
+297  jordan                               6       6      0     0       1      81.4 MB
+298  garotoargwntino                      6       6      0     0       1      1.20 GB
+299  brendonwharton                       6       6      0     0       1      71.1 MB
+300  ozzyjoestar                          6       0      6     0       1       0.4 MB
+301  acecarter                            6       2      4     0       1      15.6 MB
+302  leviconely                           6       4      2     0       1      69.5 MB
+303  alu                                  6       4      2     0       1      30.5 MB
+304  isakbrt                              6       2      4     0       1       3.6 MB
+305  fsteffan1                            6       1      5     0       1       4.0 MB
+306  lukinha22                            6       6      0     0       1      33.1 MB
+307  belikong777                          6       2      4     0       1      17.0 MB
+308  merssonn_                            6       4      2     0       1      11.3 MB
+309  ululante                             5       0      5     0       1       0.4 MB
+310  kylehynick                           5       1      4     0       1       0.6 MB
+311  matheusmachadoo                      5       1      4     0       1       1.8 MB
+312  titoalves                            5       0      5     0       1       0.2 MB
+313  naej_                                5       2      3     0       1      11.5 MB
+314  bbguloso                             5       0      5     0       1       0.2 MB
+315  oxecarvalho                          5       5      0     0       1      22.1 MB
+316  mandeochinax                         5       1      4     0       1      11.7 MB
+317  modern_spartan                       5       4      1     0       1     175.9 MB
+318  kauaxvl                              5       5      0     0       1     139.8 MB
+319  kdotbby                              5       3      2     0       1      23.2 MB
+320  jordan_neo                           5       5      0     0       1      91.6 MB
+321  romeroaugusto25                      5       4      1     0       1      38.1 MB
+322  casquiinha                           5       3      2     0       1       1.8 MB
+323  matheussampaio                       5       5      0     0       1     137.8 MB
+324  bruzulato                            5       5      0     0       1      19.5 MB
+325  austinwolf                           5       5      0     0       1      41.0 MB
+326  lucas.king                           5       5      0     0       1     316.4 MB
+327  newboldrafael                        5       4      1     0       1      19.8 MB
+328  fabuusjunior                         5       5      0     0       1      34.5 MB
+329  dkulak                               5       3      2     0       1      67.9 MB
+330  joe                                  5       5      0     0       1      88.0 MB
+331  alexprivate01                        5       5      0     0       1      41.5 MB
+332  felixjones                           5       5      0     0       1     240.3 MB
+333  godofarches                          5       3      2     0       1      59.1 MB
+334  ivansdungoen                         5       4      1     0       1      20.0 MB
+335  cmschse                              5       5      0     0       1     153.7 MB
+336  israelroncete                        5       2      3     0       1      11.8 MB
+337  tiagoramoss                          5       1      4     0       1       0.4 MB
+338  victorgomes                          5       4      1     0       1       4.8 MB
+339  marretaxxx                           5       5      0     0       1      27.0 MB
+340  alerrandro22c                        5       0      5     0       1       0.4 MB
+341  victorsimons                         5       4      1     0       1       4.8 MB
+342  kleberalvarenga                      5       2      3     0       1       9.2 MB
+343  renanborges                          5       3      2     0       1       6.5 MB
+344  danielquintas                        4       0      4     0       1       0.2 MB
+345  doddysilvaxxxx                       4       0      4     0       1       0.2 MB
+346  cristhiaan                           4       0      4     0       1       0.5 MB
+347  ericleal_                            4       0      4     0       1       0.3 MB
+348  ogustavorocha                        4       1      3     0       1       1.3 MB
+349  teddytorresxxx                       4       0      4     0       1       0.3 MB
+350  brandaomateuz                        4       2      2     0       1      18.9 MB
+351  luizggsp                             4       2      2     0       1      20.3 MB
+352  luccassnas                           4       3      1     0       1      64.2 MB
+353  hardtomxxx                           4       2      2     0       1      41.6 MB
+354  ondreaz                              4       2      2     0       1      18.8 MB
+355  wallisonpg3                          4       2      2     0       1       8.1 MB
+356  malikdelgaty                         4       3      1     0       1      90.2 MB
+357  gui_silvas                           4       3      1     0       1      34.7 MB
+358  patrickgarcia                        4       3      1     0       1      20.0 MB
+359  bigmikexxx                           4       4      0     0       1     298.8 MB
+360  harlanz                              4       3      1     0       1      13.2 MB
+361  mv                                   4       4      0     0       1       7.2 MB
+362  hotalex6                             4       4      0     0       1      46.8 MB
+363  jake_hart                            4       4      0     0       1      30.6 MB
+364  nonattog                             4       3      1     0       1       4.2 MB
+365  eufureimu                            4       4      0     0       1      49.2 MB
+366  nathanhero                           4       4      0     0       1     278.2 MB
+367  evandogmagazine                      4       4      0     0       1     164.3 MB
+368  squirrel_dad12                       4       4      0     0       1      48.8 MB
+369  trasure                              4       4      0     0       1      37.6 MB
+370  ricky_d8                             4       4      0     0       1      88.9 MB
+371  val                                  4       4      0     0       1      32.8 MB
+372  viniciustexeira                      4       1      3     0       1       1.0 MB
+373  vinnycorreia                         4       4      0     0       1       6.4 MB
+374  nordgabriell                         4       3      1     0       1       9.3 MB
+375  phrodrigues                          4       4      0     0       1       7.2 MB
+376  albieri07maromba                     4       1      3     0       3      44.6 MB
+377  menor_bruno                          3       0      3     0       1       0.2 MB
+378  baeoffundy                           3       3      0     0       1      11.6 MB
+379  nathan23cmssa                        3       3      0     0       1      30.6 MB
+380  mnxboy                               3       2      1     0       1       4.8 MB
+381  lorenzo_micheluzzi                   3       3      0     0       1       5.4 MB
+382  brucejones                           3       3      0     0       1     457.2 MB
+383  baiano_24                            3       3      0     0       1      13.4 MB
+384  mineirouairj                         3       3      0     0       1      22.4 MB
+385  aaronhugese                          3       2      1     0       1       2.5 MB
+386  xxxcsr                               3       2      1     0       1      74.1 MB
+387  xxxflavioo                           3       2      1     0       1       5.2 MB
+388  thesexypt                            3       2      1     0       1      17.5 MB
+389  angeeelja                            3       3      0     0       1       2.4 MB
+390  maiconvmoraes                        3       2      1     0       1      33.6 MB
+391  guigsims                             3       2      1     0       1      30.4 MB
+392  xldriver                             3       1      2     0       1       2.5 MB
+393  motoristamatheus                     3       1      2     0       1       7.5 MB
+394  onebigrock                           3       3      0     0       1      71.9 MB
+395  mayckollmejia                        3       3      0     0       1      62.1 MB
+396  caiotabelini                         3       2      1     0       1       3.8 MB
+397  brhonycouple                         3       2      1     0       1      14.2 MB
+398  masterdancwb                         3       2      1     0       1       1.3 MB
+399  maconheirosafado                     3       2      1     0       1      14.0 MB
+400  kevinbiceps                          3       3      0     0       1      20.1 MB
+401  warmer                               3       3      0     0       1       4.6 MB
+402  iampretao                            3       2      1     0       1       0.8 MB
+403  antoniosebert                        3       3      0     0       1     354.1 MB
+404  tradesmancock                        3       3      0     0       1      53.8 MB
+405  timkruger                            3       2      1     0       1      22.0 MB
+406  niocosta                             3       3      0     0       1       2.3 MB
+407  pedrosurfxxl                         3       2      1     0       1      15.1 MB
+408  daniloohd                            3       2      1     0       1      16.5 MB
+409  mr.slarrea                           3       3      0     0       1     201.1 MB
+410  igorbtw                              3       2      1     0       1      12.2 MB
+411  oscaro0009                           3       2      1     0       1      60.8 MB
+412  crisfernandxs                        3       2      1     0       1      29.9 MB
+413  alex.ferrarivip                      3       3      0     0       1     132.0 MB
+414  denermartins1                        3       3      0     0       1       9.6 MB
+415  gabrielfuentes                       3       3      0     0       1      10.6 MB
+416  adrigomezbarrenetx                   3       2      1     0       1       8.2 MB
+417  caiovilar                            3       2      1     0       1       4.9 MB
+418  lydiangrey                           3       3      0     0       1     135.8 MB
+419  ffael_021                            3       1      2     0       1       0.5 MB
+420  kaiquecouto                          3       1      2     0       1       1.4 MB
+421  gaelkriok                            3       2      1     0       1      10.5 MB
+422  derekshawxxx                         3       2      1     0       1      11.6 MB
+423  zeuskingx                            3       3      0     0       1      18.0 MB
+424  rickofficial                         3       2      1     0       1       7.0 MB
+425  oficialsous                          3       1      2     0       1       0.6 MB
+426  blondiepaul                          3       2      1     0       1      30.3 MB
+427  boybenji                             3       2      1     0       1      30.6 MB
+428  cawboycg                             3       2      1     0       1       6.4 MB
+429  matttretch                           3       2      1     0       1      58.2 MB
+430  guxxtavosh                           3       2      1     0       1      86.1 MB
+431  brennoramosoficial                   2       2      0     0       1      42.6 MB
+432  hungtwinks                           2       2      0     0       1      10.5 MB
+433  theonlypedro                         2       2      0     0       1       8.2 MB
+434  tatuadopeludo                        2       2      0     0       1      17.7 MB
+435  ogravadoronlyfar                     2       1      1     0       1      10.2 MB
+436  anderson                             2       1      1     0       1       6.6 MB
+437  mattcrunchypb                        2       2      0     0       1      32.1 MB
+438  vintorevas                           2       2      0     0       1     171.7 MB
+439  brodyxmeyer                          1       1      0     0       0     487.4 MB
+440  tradesman                            1       1      0     0       0      92.6 MB
+
+================================================================================
+TODOS OS 440 USUÁRIOS POR TAMANHO TOTAL
+================================================================================
+
+1. onlyfans                       9.62 GB (1825 mídias)
+2. 085nunes                       5.60 GB (147 mídias)
+3. caramujo                       5.52 GB (153 mídias)
+4. privacy                        3.25 GB (656 mídias)
+5. garotaofitnes                  2.94 GB (99 mídias)
+6. caiopernalonga                 2.86 GB (70 mídias)
+7. jrluc                          2.55 GB (57 mídias)
+8. fitnarad                       2.42 GB (74 mídias)
+9. aingeru                        2.36 GB (101 mídias)
+10. breno.martins                  2.23 GB (68 mídias)
+11. agrohot                        2.21 GB (151 mídias)
+12. kauezinhoo                     2.05 GB (118 mídias)
+13. vilengo                        2.04 GB (130 mídias)
+14. spartacosz                     1.78 GB (46 mídias)
+15. alohadrico                     1.72 GB (159 mídias)
+16. piquezika                      1.57 GB (77 mídias)
+17. kitoshelby00                   1.52 GB (125 mídias)
+18. toofriendlytom                 1.43 GB (39 mídias)
+19. jmloz                          1.32 GB (24 mídias)
+20. novinho_26ctm                  1.24 GB (39 mídias)
+21. frandullon86                   1.23 GB (23 mídias)
+22. egoistadotcom                  1.22 GB (53 mídias)
+23. dichocolatte                   1.20 GB (79 mídias)
+24. mxtbear                        1.20 GB (50 mídias)
+25. garotoargwntino                1.20 GB (6 mídias)
+26. matheussoaresy                 1.18 GB (98 mídias)
+27. samvass                        1.10 GB (38 mídias)
+28. luizmathiaas                   1.06 GB (95 mídias)
+29. brandtsboys                    1.05 GB (70 mídias)
+30. eaejai                         1.04 GB (139 mídias)
+31. marcosandre                    0.98 GB (90 mídias)
+32. remasm                         0.95 GB (30 mídias)
+33. alexwm10                       0.94 GB (143 mídias)
+34. mrmuscle                       0.92 GB (8 mídias)
+35. daniipovoas                    0.91 GB (28 mídias)
+36. brunobb_beliel                 0.91 GB (30 mídias)
+37. paccoo                         0.90 GB (69 mídias)
+38. karlosferr24cm                 0.88 GB (50 mídias)
+39. alexs2felippe                  0.88 GB (56 mídias)
+40. vulgo_ruan                     0.85 GB (49 mídias)
+41. deividfortunato                0.85 GB (59 mídias)
+42. danielzambrano                 0.82 GB (25 mídias)
+43. mr_eddie_d                     0.79 GB (25 mídias)
+44. yuribonotto                    0.72 GB (103 mídias)
+45. josiah_hoffman                 0.71 GB (38 mídias)
+46. xgiox69                        0.71 GB (50 mídias)
+47. crylucas                       0.65 GB (18 mídias)
+48. chileantwink18                 0.64 GB (14 mídias)
+49. jairofernandes_                0.63 GB (33 mídias)
+50. emilivno                       0.62 GB (10 mídias)
+51. sojmani                        0.60 GB (24 mídias)
+52. ocaadu                         0.60 GB (50 mídias)
+53. ksl                            0.60 GB (87 mídias)
+54. kauaotto                       0.58 GB (49 mídias)
+55. thiagolps_                     0.56 GB (40 mídias)
+56. afelipeb                       0.53 GB (71 mídias)
+57. facundoantunes                 0.53 GB (77 mídias)
+58. militares                      0.52 GB (30 mídias)
+59. cartainst                      0.52 GB (7 mídias)
+60. pedrolucaspl01                 0.50 GB (89 mídias)
+61. vitornegao2003                 0.49 GB (37 mídias)
+62. pa                             0.49 GB (29 mídias)
+63. lukertwink                     0.48 GB (8 mídias)
+64. fabien                         0.48 GB (21 mídias)
+65. niccoloneri                    0.48 GB (9 mídias)
+66. brodyxmeyer                    0.48 GB (1 mídias)
+67. henrique.nassif                0.47 GB (97 mídias)
+68. teamchleep                     0.47 GB (42 mídias)
+69. alesiewert                     0.47 GB (30 mídias)
+70. itsjustparker                  0.46 GB (14 mídias)
+71. brucejones                     0.45 GB (3 mídias)
+72. evertonteal                    0.43 GB (40 mídias)
+73. ofc_guivieira                  0.43 GB (69 mídias)
+74. fit_liam                       0.42 GB (19 mídias)
+75. petrotolentino                 0.42 GB (10 mídias)
+76. ygorbahia_                     0.42 GB (100 mídias)
+77. jottaeme                       0.42 GB (47 mídias)
+78. xsaiyanoz                      0.41 GB (20 mídias)
+79. pauloricardao                  0.40 GB (39 mídias)
+80. uendercomu                     0.40 GB (93 mídias)
+81. matheus_amorim                 0.39 GB (30 mídias)
+82. dustinmceer1                   0.38 GB (15 mídias)
+83. luiz_reis                      0.37 GB (56 mídias)
+84. jludwig                        0.37 GB (85 mídias)
+85. luizmiguel_07                  0.37 GB (137 mídias)
+86. vitinhoprado                   0.36 GB (60 mídias)
+87. mattew22cm                     0.36 GB (30 mídias)
+88. e.herlan                       0.35 GB (30 mídias)
+89. antoniosebert                  0.35 GB (3 mídias)
+90. plinio271                      0.33 GB (10 mídias)
+91. pvitorbs                       0.33 GB (10 mídias)
+92. wrvthful                       0.33 GB (15 mídias)
+93. felippemasson                  0.33 GB (42 mídias)
+94. khalljon                       0.33 GB (12 mídias)
+95. kyliancria                     0.32 GB (39 mídias)
+96. albertsaintz                   0.32 GB (50 mídias)
+97. eucaiquef                      0.32 GB (20 mídias)
+98. elboydeutuiter                 0.31 GB (10 mídias)
+99. euduardo                       0.31 GB (14 mídias)
+100. lucas.king                     0.31 GB (5 mídias)
+101. dyamondjohn03                  0.31 GB (50 mídias)
+102. igorgomms                      0.30 GB (40 mídias)
+103. rafamarttinz                   0.29 GB (40 mídias)
+104. bigmikexxx                     0.29 GB (4 mídias)
+105. arcosatyand                    0.29 GB (30 mídias)
+106. rossdalton                     0.28 GB (24 mídias)
+107. surtadinrs                     0.27 GB (40 mídias)
+108. nathanhero                     0.27 GB (4 mídias)
+109. matheusfc                      0.27 GB (6 mídias)
+110. jeroboam30                     0.27 GB (20 mídias)
+111. marcusdotado                   0.27 GB (17 mídias)
+112. bremenfitness                  0.26 GB (13 mídias)
+113. bentocaminhoneiro23            0.26 GB (30 mídias)
+114. luccanov69                     0.26 GB (25 mídias)
+115. jottaeme_ofc                   0.25 GB (10 mídias)
+116. samdot21                       0.25 GB (54 mídias)
+117. gemeosrocha                    0.25 GB (90 mídias)
+118. danielgr444                    0.25 GB (18 mídias)
+119. tarzan_topxxxl                 0.25 GB (11 mídias)
+120. uweliton                       0.24 GB (24 mídias)
+121. pablofelipefm                  0.24 GB (8 mídias)
+122. serafingabs                    0.23 GB (48 mídias)
+123. felixjones                     0.23 GB (5 mídias)
+124. bigfit_                        0.23 GB (8 mídias)
+125. pedroplx                       0.23 GB (38 mídias)
+126. kingnizzi                      0.22 GB (20 mídias)
+127. joeymillsxxx                   0.22 GB (8 mídias)
+128. dwaynemckellbaby               0.22 GB (8 mídias)
+129. mrmoreno8                      0.22 GB (13 mídias)
+130. aluisio                        0.22 GB (52 mídias)
+131. alejandrobelmont               0.21 GB (8 mídias)
+132. fnunes                         0.20 GB (10 mídias)
+133. mr.slarrea                     0.20 GB (3 mídias)
+134. mendesdotado                   0.20 GB (58 mídias)
+135. euyuridiaz                     0.19 GB (17 mídias)
+136. nate_2k                        0.19 GB (20 mídias)
+137. bandito21                      0.19 GB (10 mídias)
+138. zaydom                         0.18 GB (46 mídias)
+139. lipeuchispriv                  0.18 GB (80 mídias)
+140. facundo                        0.18 GB (18 mídias)
+141. kevin_boyx                     0.17 GB (20 mídias)
+142. modern_spartan                 0.17 GB (5 mídias)
+143. mettew22                       0.17 GB (39 mídias)
+144. vintorevas                     0.17 GB (2 mídias)
+145. samuka_sts                     0.17 GB (15 mídias)
+146. ericnvee                       0.16 GB (30 mídias)
+147. mlk_hulg                       0.16 GB (18 mídias)
+148. tradesmandick                  0.16 GB (38 mídias)
+149. evandogmagazine                0.16 GB (4 mídias)
+150. ybseeja                        0.16 GB (18 mídias)
+151. juniorolioti                   0.16 GB (8 mídias)
+152. makiinhoo                      0.15 GB (25 mídias)
+153. furie235                       0.15 GB (10 mídias)
+154. ederxxl                        0.15 GB (28 mídias)
+155. oficialtalox                   0.15 GB (19 mídias)
+156. cmschse                        0.15 GB (5 mídias)
+157. jakipz                         0.15 GB (19 mídias)
+158. mannyhp13                      0.15 GB (20 mídias)
+159. henriquelimatv                 0.15 GB (30 mídias)
+160. vsilveira                      0.14 GB (10 mídias)
+161. eubiel                         0.14 GB (33 mídias)
+162. kauancandeia                   0.14 GB (29 mídias)
+163. tyleriacona                    0.14 GB (15 mídias)
+164. kauaxvl                        0.14 GB (5 mídias)
+165. guimarqezz                     0.13 GB (49 mídias)
+166. matheussampaio                 0.13 GB (5 mídias)
+167. lydiangrey                     0.13 GB (3 mídias)
+168. alex.ferrarivip                0.13 GB (3 mídias)
+169. gabrielcandido                 0.13 GB (29 mídias)
+170. thocostaoficial                0.13 GB (79 mídias)
+171. henrikecouto                   0.13 GB (9 mídias)
+172. saucymosess                    0.12 GB (8 mídias)
+173. jaffferreira                   0.12 GB (30 mídias)
+174. malokadot21                    0.12 GB (49 mídias)
+175. viniciusteixiera               0.12 GB (30 mídias)
+176. fjfgkrndcvknf                  0.12 GB (10 mídias)
+177. timlaurenz                     0.11 GB (15 mídias)
+178. scandicpleasure                0.11 GB (9 mídias)
+179. adamsanerof                    0.11 GB (30 mídias)
+180. jaligone                       0.11 GB (7 mídias)
+181. israel2074                     0.11 GB (20 mídias)
+182. maximiliabarmin                0.10 GB (7 mídias)
+183. moreledgar95                   0.10 GB (9 mídias)
+184. andediass                      0.10 GB (60 mídias)
+185. luciferrnsfw                   0.10 GB (10 mídias)
+186. feliipecarioca                 0.09 GB (19 mídias)
+187. novin_scdot                    0.09 GB (10 mídias)
+188. farmer_b28                     0.09 GB (6 mídias)
+189. tradesman                      0.09 GB (1 mídias)
+190. jordan_neo                     0.09 GB (5 mídias)
+191. max_barz                       0.09 GB (10 mídias)
+192. isaaqqdias                     0.09 GB (20 mídias)
+193. guapoyuko                      0.09 GB (20 mídias)
+194. malikdelgaty                   0.09 GB (4 mídias)
+195. ricky_d8                       0.09 GB (4 mídias)
+196. joe                            0.09 GB (5 mídias)
+197. vitincavalieri                 0.09 GB (9 mídias)
+198. tattoputo                      0.08 GB (8 mídias)
+199. guxxtavosh                     0.08 GB (3 mídias)
+200. oficialcleisonn                0.08 GB (20 mídias)
+201. mew                            0.08 GB (9 mídias)
+202. maromb                         0.08 GB (20 mídias)
+203. tolentinoprive                 0.08 GB (9 mídias)
+204. jordan                         0.08 GB (6 mídias)
+205. sunshinesmile99                0.08 GB (10 mídias)
+206. castrofire                     0.08 GB (9 mídias)
+207. milder_dz                      0.08 GB (6 mídias)
+208. bhizzi                         0.08 GB (29 mídias)
+209. swcollegeboys                  0.07 GB (9 mídias)
+210. iagoalvesxx                    0.07 GB (21 mídias)
+211. xxxcsr                         0.07 GB (3 mídias)
+212. aust1nday                      0.07 GB (7 mídias)
+213. lucasthomaz                    0.07 GB (28 mídias)
+214. igornovabr                     0.07 GB (46 mídias)
+215. onebigrock                     0.07 GB (3 mídias)
+216. romildosantos                  0.07 GB (10 mídias)
+217. brendonwharton                 0.07 GB (6 mídias)
+218. coentrin                       0.07 GB (9 mídias)
+219. davidmatheushc                 0.07 GB (10 mídias)
+220. leviconely                     0.07 GB (6 mídias)
+221. pedreirofibrado                0.07 GB (31 mídias)
+222. dkulak                         0.07 GB (5 mídias)
+223. nizam                          0.06 GB (32 mídias)
+224. mjgomes021                     0.06 GB (14 mídias)
+225. rick_sanss                     0.06 GB (22 mídias)
+226. bilatinmen                     0.06 GB (7 mídias)
+227. luccassnas                     0.06 GB (4 mídias)
+228. felipe_wolf                    0.06 GB (8 mídias)
+229. chulipaoficial                 0.06 GB (20 mídias)
+230. maxpriceofficial               0.06 GB (8 mídias)
+231. mayckollmejia                  0.06 GB (3 mídias)
+232. tywanks                        0.06 GB (8 mídias)
+233. theoeneffectvip                0.06 GB (10 mídias)
+234. oscaro0009                     0.06 GB (3 mídias)
+235. liamarnoldsxx                  0.06 GB (16 mídias)
+236. polofromthe305                 0.06 GB (20 mídias)
+237. godofarches                    0.06 GB (5 mídias)
+238. ograndesimoes                  0.06 GB (6 mídias)
+239. brownboynz                     0.06 GB (10 mídias)
+240. matttretch                     0.06 GB (3 mídias)
+241. danielmontoya                  0.06 GB (8 mídias)
+242. alexsalgueiro                  0.06 GB (11 mídias)
+243. mlk_discretu                   0.05 GB (9 mídias)
+244. delpenho                       0.05 GB (29 mídias)
+245. tradesmancock                  0.05 GB (3 mídias)
+246. dynhoalves                     0.05 GB (7 mídias)
+247. clzada                         0.05 GB (18 mídias)
+248. caioalvarenga                  0.05 GB (8 mídias)
+249. matheusreis                    0.05 GB (20 mídias)
+250. girthmasterr_solo              0.05 GB (8 mídias)
+251. teal_ev                        0.05 GB (19 mídias)
+252. mamadorcarioca                 0.05 GB (8 mídias)
+253. eufureimu                      0.05 GB (4 mídias)
+254. squirrel_dad12                 0.05 GB (4 mídias)
+255. juniorrodrigues                0.05 GB (7 mídias)
+256. hotalex6                       0.05 GB (4 mídias)
+257. goulart                        0.05 GB (20 mídias)
+258. motoboyjunior                  0.04 GB (10 mídias)
+259. paulo_victormelo               0.04 GB (7 mídias)
+260. albieri07maromba               0.04 GB (4 mídias)
+261. davidhotpics                   0.04 GB (8 mídias)
+262. brennoramosoficial             0.04 GB (2 mídias)
+263. gbcria                         0.04 GB (19 mídias)
+264. hardtomxxx                     0.04 GB (4 mídias)
+265. alexprivate01                  0.04 GB (5 mídias)
+266. ayllann4                       0.04 GB (18 mídias)
+267. austinwolf                     0.04 GB (5 mídias)
+268. javivelaroxxx                  0.04 GB (6 mídias)
+269. erdglez                        0.04 GB (30 mídias)
+270. maicky                         0.04 GB (9 mídias)
+271. weslleyxs                      0.04 GB (16 mídias)
+272. romeroaugusto25                0.04 GB (5 mídias)
+273. trasure                        0.04 GB (4 mídias)
+274. dudu                           0.04 GB (12 mídias)
+275. riverosale                     0.04 GB (34 mídias)
+276. nickmasc                       0.03 GB (7 mídias)
+277. ofcmatheus                     0.03 GB (9 mídias)
+278. gui_silvas                     0.03 GB (4 mídias)
+279. fabuusjunior                   0.03 GB (5 mídias)
+280. bonjouraxel                    0.03 GB (7 mídias)
+281. zamxof                         0.03 GB (7 mídias)
+282. maiconvmoraes                  0.03 GB (3 mídias)
+283. mvin1cius                      0.03 GB (20 mídias)
+284. tomlopezzz                     0.03 GB (10 mídias)
+285. lukinha22                      0.03 GB (6 mídias)
+286. val                            0.03 GB (4 mídias)
+287. mattcrunchypb                  0.03 GB (2 mídias)
+288. jake_hart                      0.03 GB (4 mídias)
+289. boybenji                       0.03 GB (3 mídias)
+290. nathan23cmssa                  0.03 GB (3 mídias)
+291. alu                            0.03 GB (6 mídias)
+292. guigsims                       0.03 GB (3 mídias)
+293. blondiepaul                    0.03 GB (3 mídias)
+294. crisfernandxs                  0.03 GB (3 mídias)
+295. felixamericano                 0.03 GB (17 mídias)
+296. machdovr                       0.03 GB (20 mídias)
+297. davboyy                        0.03 GB (38 mídias)
+298. cellos                         0.03 GB (10 mídias)
+299. marretaxxx                     0.03 GB (5 mídias)
+300. alexmendes                     0.03 GB (10 mídias)
+301. miguelcastro                   0.03 GB (10 mídias)
+302. superdotarg                    0.02 GB (16 mídias)
+303. liascandido                    0.02 GB (23 mídias)
+304. valerio_orozco                 0.02 GB (10 mídias)
+305. julianchase                    0.02 GB (13 mídias)
+306. falatuweslley                  0.02 GB (19 mídias)
+307. kdotbby                        0.02 GB (5 mídias)
+308. mineirouairj                   0.02 GB (3 mídias)
+309. oxecarvalho                    0.02 GB (5 mídias)
+310. timkruger                      0.02 GB (3 mídias)
+311. woodyzin                       0.02 GB (9 mídias)
+312. gabriel_ortegas                0.02 GB (8 mídias)
+313. luizggsp                       0.02 GB (4 mídias)
+314. kevinbiceps                    0.02 GB (3 mídias)
+315. ivansdungoen                   0.02 GB (5 mídias)
+316. patrickgarcia                  0.02 GB (4 mídias)
+317. newboldrafael                  0.02 GB (5 mídias)
+318. bruzulato                      0.02 GB (5 mídias)
+319. brandaomateuz                  0.02 GB (4 mídias)
+320. ondreaz                        0.02 GB (4 mídias)
+321. endrick_philippe               0.02 GB (8 mídias)
+322. kaiorod                        0.02 GB (11 mídias)
+323. zeuskingx                      0.02 GB (3 mídias)
+324. tatuadopeludo                  0.02 GB (2 mídias)
+325. thesexypt                      0.02 GB (3 mídias)
+326. belikong777                    0.02 GB (6 mídias)
+327. daniloohd                      0.02 GB (3 mídias)
+328. leonardosafra                  0.02 GB (13 mídias)
+329. igormiller                     0.02 GB (6 mídias)
+330. acecarter                      0.02 GB (6 mídias)
+331. miguelguerreroa                0.01 GB (64 mídias)
+332. pedrosurfxxl                   0.01 GB (3 mídias)
+333. viniaraujo                     0.01 GB (10 mídias)
+334. eduardovivas                   0.01 GB (17 mídias)
+335. brhonycouple                   0.01 GB (3 mídias)
+336. maconheirosafado               0.01 GB (3 mídias)
+337. eutmxxx                        0.01 GB (7 mídias)
+338. triton                         0.01 GB (10 mídias)
+339. baiano_24                      0.01 GB (3 mídias)
+340. jdmontota11                    0.01 GB (10 mídias)
+341. harlanz                        0.01 GB (4 mídias)
+342. jeanmendes                     0.01 GB (20 mídias)
+343. igorbtw                        0.01 GB (3 mídias)
+344. israelroncete                  0.01 GB (5 mídias)
+345. mandeochinax                   0.01 GB (5 mídias)
+346. mcpedrin                       0.01 GB (10 mídias)
+347. derekshawxxx                   0.01 GB (3 mídias)
+348. baeoffundy                     0.01 GB (3 mídias)
+349. naej_                          0.01 GB (5 mídias)
+350. merssonn_                      0.01 GB (6 mídias)
+351. gabrielfuentes                 0.01 GB (3 mídias)
+352. hungtwinks                     0.01 GB (2 mídias)
+353. gaelkriok                      0.01 GB (3 mídias)
+354. jay_55k                        0.01 GB (10 mídias)
+355. ogravadoronlyfar               0.01 GB (2 mídias)
+356. hesdantass                     0.01 GB (17 mídias)
+357. playfezao                      0.01 GB (17 mídias)
+358. eibrunitoo                     0.01 GB (10 mídias)
+359. jupetirrr                      0.01 GB (8 mídias)
+360. denermartins1                  0.01 GB (3 mídias)
+361. heysoyluaa                     0.01 GB (9 mídias)
+362. nordgabriell                   0.01 GB (4 mídias)
+363. kleberalvarenga                0.01 GB (5 mídias)
+364. officialkako                   0.01 GB (10 mídias)
+365. gutogato                       0.01 GB (7 mídias)
+366. renxnpaz                       0.01 GB (8 mídias)
+367. mons                           0.01 GB (10 mídias)
+368. adrigomezbarrenetx             0.01 GB (3 mídias)
+369. taddydaddy                     0.01 GB (7 mídias)
+370. theonlypedro                   0.01 GB (2 mídias)
+371. oproblemao                     0.01 GB (12 mídias)
+372. wallisonpg3                    0.01 GB (4 mídias)
+373. motoristamatheus               0.01 GB (3 mídias)
+374. phrodrigues                    0.01 GB (4 mídias)
+375. mv                             0.01 GB (4 mídias)
+376. rickofficial                   0.01 GB (3 mídias)
+377. deek_aesthetic                 0.01 GB (23 mídias)
+378. anderson                       0.01 GB (2 mídias)
+379. renanborges                    0.01 GB (5 mídias)
+380. vinnycorreia                   0.01 GB (4 mídias)
+381. cawboycg                       0.01 GB (3 mídias)
+382. kev                            0.01 GB (12 mídias)
+383. samuel.brenes17                0.01 GB (10 mídias)
+384. lorenzo_micheluzzi             0.01 GB (3 mídias)
+385. xxxflavioo                     0.01 GB (3 mídias)
+386. caiovilar                      0.00 GB (3 mídias)
+387. victorgomes                    0.00 GB (5 mídias)
+388. victorsimons                   0.00 GB (5 mídias)
+389. mnxboy                         0.00 GB (3 mídias)
+390. davidalemao                    0.00 GB (9 mídias)
+391. warmer                         0.00 GB (3 mídias)
+392. igorpaes                       0.00 GB (7 mídias)
+393. euchinax                       0.00 GB (8 mídias)
+394. paulobrawss                    0.00 GB (10 mídias)
+395. nonattog                       0.00 GB (4 mídias)
+396. fsteffan1                      0.00 GB (6 mídias)
+397. caiotabelini                   0.00 GB (3 mídias)
+398. potrocarrillo                  0.00 GB (9 mídias)
+399. brmartins                      0.00 GB (7 mídias)
+400. isakbrt                        0.00 GB (6 mídias)
+401. adonishayesxxx                 0.00 GB (9 mídias)
+402. xldriver                       0.00 GB (3 mídias)
+403. aaronhugese                    0.00 GB (3 mídias)
+404. angeeelja                      0.00 GB (3 mídias)
+405. niocosta                       0.00 GB (3 mídias)
+406. otaldobonis                    0.00 GB (40 mídias)
+407. matheusmachadoo                0.00 GB (5 mídias)
+408. casquiinha                     0.00 GB (5 mídias)
+409. ikarus                         0.00 GB (20 mídias)
+410. cesarbabyy                     0.00 GB (7 mídias)
+411. kaiquecouto                    0.00 GB (3 mídias)
+412. brannoleno                     0.00 GB (20 mídias)
+413. ogustavorocha                  0.00 GB (4 mídias)
+414. masterdancwb                   0.00 GB (3 mídias)
+415. viniciustexeira                0.00 GB (4 mídias)
+416. alexriverasoy                  0.00 GB (10 mídias)
+417. iampretao                      0.00 GB (3 mídias)
+418. argentzannter                  0.00 GB (10 mídias)
+419. kylehynick                     0.00 GB (5 mídias)
+420. oficialsous                    0.00 GB (3 mídias)
+421. lucasrochaa                    0.00 GB (8 mídias)
+422. juniiorc25                     0.00 GB (9 mídias)
+423. ffael_021                      0.00 GB (3 mídias)
+424. guisousaa_1                    0.00 GB (8 mídias)
+425. cristhiaan                     0.00 GB (4 mídias)
+426. alerrandro22c                  0.00 GB (5 mídias)
+427. eulluquinhas                   0.00 GB (7 mídias)
+428. andersonparkee                 0.00 GB (6 mídias)
+429. ozzyjoestar                    0.00 GB (6 mídias)
+430. tiagoramoss                    0.00 GB (5 mídias)
+431. dalton69xxx                    0.00 GB (6 mídias)
+432. ululante                       0.00 GB (5 mídias)
+433. cerqueiralz                    0.00 GB (6 mídias)
+434. ericleal_                      0.00 GB (4 mídias)
+435. teddytorresxxx                 0.00 GB (4 mídias)
+436. titoalves                      0.00 GB (5 mídias)
+437. danielquintas                  0.00 GB (4 mídias)
+438. menor_bruno                    0.00 GB (3 mídias)
+439. doddysilvaxxxx                 0.00 GB (4 mídias)
+440. bbguloso                       0.00 GB (5 mídias)
+
+================================================================================

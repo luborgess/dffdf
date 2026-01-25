@@ -78,6 +78,19 @@ TOPIC_MAP_FILE = 'topic_map.json'
 USER_TOPIC_MAP_FILE = 'user_topic_map.json'
 ORGANIZE_BY_USER = os.environ.get('ORGANIZE_BY_USER', 'false').lower() == 'true'
 
+# Filtrar apenas um usuário específico (ex: "usuario123")
+# Se definido, apenas álbuns deste usuário serão processados
+FILTER_USER = os.environ.get('FILTER_USER', '').strip().lower()
+
+# Modo scan: apenas lista usuários encontrados sem baixar nada
+SCAN_USERS_ONLY = os.environ.get('SCAN_USERS_ONLY', 'false').lower() == 'true'
+
+# Arquivo JSON para salvar/carregar lista de usuários encontrados no scan
+USERS_JSON_FILE = 'users_found.json'
+
+# Filtrar usuários do arquivo JSON
+FILTER_FROM_JSON = os.environ.get('FILTER_FROM_JSON', 'false').lower() == 'true'
+
 # Streaming config
 CHUNK_SIZE = 512 * 1024  # 512KB por chunk (máximo MTProto)
 PARALLEL_UPLOADS = 10     # Chunks em paralelo no upload
@@ -881,7 +894,46 @@ class StreamingCloner:
         self.topic_manager = topic_manager
         self.user_topic_manager = user_topic_manager
         self.last_send_time = 0
-    
+        self.allowed_users = self._load_users_from_json()
+        self.found_users = set()
+
+    def _load_users_from_json(self) -> set[str]:
+        """Carrega lista de usuários do arquivo JSON."""
+        if not FILTER_FROM_JSON:
+            return None
+        try:
+            if os.path.exists(USERS_JSON_FILE):
+                with open(USERS_JSON_FILE, 'r') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        users = set(u.lower() for u in data if u)
+                        log.info(f"📋 Carregados {len(users)} usuários de {USERS_JSON_FILE}")
+                        return users
+        except Exception as e:
+            log.warning(f"⚠ Erro ao carregar {USERS_JSON_FILE}: {e}")
+        return None
+
+    def save_found_users_json(self):
+        """Salva usuários encontrados no scan para arquivo JSON."""
+        if not self.found_users:
+            log.warning("Nenhum usuário encontrado para salvar")
+            return
+        try:
+            users_list = sorted(list(self.found_users))
+            with open(USERS_JSON_FILE, 'w') as f:
+                json.dump(users_list, f, indent=2)
+            log.info(f"💾 Salvos {len(users_list)} usuários em {USERS_JSON_FILE}")
+        except Exception as e:
+            log.error(f"Erro ao salvar {USERS_JSON_FILE}: {e}")
+
+    def is_user_allowed(self, username: str) -> bool:
+        """Verifica se o usuário está na lista permitida."""
+        if not self.allowed_users:
+            return True
+        if not username:
+            return True
+        return username.lower() in self.allowed_users
+
     async def wait_rate_limit(self):
         """Aguarda rate limit."""
         elapsed = time.time() - self.last_send_time
@@ -903,9 +955,30 @@ class StreamingCloner:
         target_topic = TARGET_TOPIC
 
         # Se ORGANIZE_BY_USER está ativo, extrair username e criar/usar tópico
+        username = None
         if ORGANIZE_BY_USER and self.user_topic_manager:
             caption = getattr(msg, 'text', '') or getattr(msg, 'message', '') or ''
             username = self.user_topic_manager.extract_username(caption)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                return True  # Não baixa nada
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                    return True
+                log.info(f"✅ Filtro: msg {msg.id} do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                self.checkpoint.mark_done(SOURCE_CHAT, msg.id)
+                return True
+
             if username:
                 target_topic = await self.user_topic_manager.get_or_create_user_topic(
                     username, TARGET_CHAT
@@ -1026,8 +1099,34 @@ class StreamingCloner:
         # Determinar tópico de destino
         target_topic = TARGET_TOPIC
 
+        username = None
         if ORGANIZE_BY_USER and self.user_topic_manager:
             username = self.user_topic_manager.extract_username_from_messages(messages)
+
+            # Modo scan: coletar usuários sem baixar
+            if SCAN_USERS_ONLY:
+                if username:
+                    self.found_users.add(username)
+                # Marcar como processado sem baixar
+                for msg in messages:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                return True
+
+            # Filtro de usuário: pular se não for o usuário desejado
+            if FILTER_USER:
+                if not username or username.lower() != FILTER_USER:
+                    # Marcar como processado sem baixar
+                    for msg in messages:
+                        self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                    return True
+                log.info(f"✅ Filtro: álbum do usuário '{username}'")
+
+            # Filtro do JSON: pular se usuário não estiver na lista
+            if FILTER_FROM_JSON and not self.is_user_allowed(username):
+                for msg in messages:
+                    self.checkpoint.mark_done(SOURCE_CHAT, msg.id, SESSION_NAME)
+                return True
+
             if username:
                 target_topic = await self.user_topic_manager.get_or_create_user_topic(
                     username, TARGET_CHAT
@@ -1435,6 +1534,12 @@ async def main():
     log.info(f"Checkpoint DB: {os.path.abspath(SHARED_DB_PATH)}")
     log.info(f"Chunk size: {CHUNK_SIZE // 1024}KB")
     log.info(f"Organizar por usuário: {'SIM' if ORGANIZE_BY_USER else 'NÃO'}")
+    if SCAN_USERS_ONLY:
+        log.info(f"🔍 MODO SCAN ATIVADO - apenas listando usuários, sem baixar")
+    if FILTER_USER:
+        log.info(f"🎯 FILTRO DE USUÁRIO: apenas '{FILTER_USER}' será processado")
+    if FILTER_FROM_JSON:
+        log.info(f"📋 FILTRO DO JSON: apenas usuários de '{USERS_JSON_FILE}' serão processados")
     log.info("=" * 60)
 
     # Inicializar checkpoint compartilhado
@@ -1554,28 +1659,41 @@ async def main():
                 current_album = [msg]
                 current_grouped_id = grouped_id
 
-            # Log a cada 10 mensagens processadas
+            # Log de progresso (mais espaçado no modo scan)
             total = stats['ok'] + stats['fail']
-            if total > 0 and total % 10 == 0:
-                elapsed = (time.time() - start_time) / 60
-                rate = total / elapsed if elapsed > 0 else 0
-                gb = stats['bytes'] / (1024**3)
-                log.info(
-                    f"Progresso: {stats['ok']} ok | {stats['albums']} álbuns | {stats['skip']} skip | "
-                    f"{rate:.1f} msg/min | {gb:.2f} GB"
-                )
+            log_interval = 500 if SCAN_USERS_ONLY else 10
+            if total > 0 and total % log_interval == 0:
+                if SCAN_USERS_ONLY:
+                    unique_users = len(cloner.found_users)
+                    log.info(f"🔍 Scan: {total} msgs processadas | {unique_users} usuários únicos")
+                else:
+                    elapsed = (time.time() - start_time) / 60
+                    rate = total / elapsed if elapsed > 0 else 0
+                    gb = stats['bytes'] / (1024**3)
+                    log.info(
+                        f"Progresso: {stats['ok']} ok | {stats['albums']} álbuns | {stats['skip']} skip | "
+                        f"{rate:.1f} msg/min | {gb:.2f} GB"
+                    )
 
         # Processar último álbum pendente
         await flush_album()
 
+        # Salvar JSON se estiver em modo scan
+        if SCAN_USERS_ONLY:
+            cloner.save_found_users_json()
+
     elapsed = (time.time() - start_time) / 60
     log.info("=" * 60)
     log.info("CONCLUÍDO!")
-    log.info(f"Sucesso: {stats['ok']} mensagens")
-    log.info(f"Álbuns: {stats['albums']}")
-    log.info(f"Puladas (já feitas): {stats['skip']}")
-    log.info(f"Falhas: {stats['fail']}")
-    log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
+    if SCAN_USERS_ONLY:
+        log.info(f"Usuários únicos encontrados: {len(cloner.found_users)}")
+        log.info(f"Salvos em: {USERS_JSON_FILE}")
+    else:
+        log.info(f"Sucesso: {stats['ok']} mensagens")
+        log.info(f"Álbuns: {stats['albums']}")
+        log.info(f"Puladas (já feitas): {stats['skip']}")
+        log.info(f"Falhas: {stats['fail']}")
+        log.info(f"Transferido: {stats['bytes']/(1024**3):.2f} GB")
     log.info(f"Tempo: {elapsed:.1f} minutos")
     log.info("=" * 60)
 
